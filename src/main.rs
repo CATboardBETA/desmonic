@@ -1,10 +1,10 @@
 #![allow(dead_code)]
+use crate::eval::eval;
 use crate::lexer::lex;
-use crate::parser::{VerifyFlags, parse, verify, Spanned, Expr};
+use crate::parser::{Expr, Spanned, VerifyFlags, parse, verify};
 use clap::builder::styling;
 use clap::{Parser, Subcommand};
-use log::{LevelFilter, trace, info};
-use crate::eval::eval;
+use log::{LevelFilter, info, trace};
 
 mod eval;
 mod lexer;
@@ -108,5 +108,5 @@ fn compile(input: String, output: Option<String>, v: bool) {
         info!("Verifying AST...")
     }
     verify(&parsed, &mut VerifyFlags::empty());
-    eval(parsed)
+    println!("expression: {}", eval(parsed));
 }

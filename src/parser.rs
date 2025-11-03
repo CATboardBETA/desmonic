@@ -1,25 +1,25 @@
 #![allow(dead_code)]
 
-use std::ops::Deref;
 use crate::lexer::{ComparisonOp, Keyword, Token};
 use bitflags::bitflags;
 use chumsky::prelude::*;
 use log::{error, info};
+use std::ops::Deref;
 use std::process;
 
 #[derive(Debug, PartialEq)]
 pub struct Elif {
-    lh_cmp: Spanned<Expr>,
-    cmp: ComparisonOp,
-    rh_cmp: Spanned<Expr>,
-    cmp2: Option<ComparisonOp>,
-    rrh_cmp: Option<Spanned<Expr>>,
-    body: Spanned<Expr>,
+    pub lh_cmp: Spanned<Expr>,
+    pub cmp: ComparisonOp,
+    pub rh_cmp: Spanned<Expr>,
+    pub cmp2: Option<ComparisonOp>,
+    pub rrh_cmp: Option<Spanned<Expr>>,
+    pub body: Spanned<Expr>,
 }
 
 #[derive(Debug, PartialEq)]
 pub struct Else {
-    body: Spanned<Expr>,
+    pub body: Spanned<Expr>,
 }
 
 #[derive(Debug, PartialEq)]
@@ -85,23 +85,30 @@ pub fn parse(input: Vec<Token>, v: bool) -> Spanned<Expr> {
     }
 }
 
-fn parser<'src>() -> impl Parser<'src, &'src [Token], Spanned<Expr>, extra::Full<Rich<'src, Token>, (), ()>> {
+fn parser<'src>()
+-> impl Parser<'src, &'src [Token], Spanned<Expr>, extra::Full<Rich<'src, Token>, (), ()>> {
     use crate::lexer::Token as Tk;
     recursive(|p| {
         let atom = {
-            let parenthesized = p.clone().map(|x: Spanned<Expr>| x.0).delimited_by(just(Tk::LParen), just(Tk::RParen)).boxed();
+            let parenthesized = p
+                .clone()
+                .map(|x: Spanned<Expr>| x.0)
+                .delimited_by(just(Tk::LParen), just(Tk::RParen))
+                .boxed();
             let list = p
                 .clone()
                 .separated_by(just(Tk::Comma))
                 .collect::<Vec<_>>()
                 .map(Expr::List)
-                .delimited_by(just(Tk::LBracket), just(Tk::RBracket)).boxed();
+                .delimited_by(just(Tk::LBracket), just(Tk::RBracket))
+                .boxed();
             let pt2 = p
                 .clone()
                 .then_ignore(just(Tk::Comma))
                 .then(p.clone())
                 .delimited_by(just(Tk::LParen), just(Tk::RParen))
-                .map(|(x, y)| Expr::Pt2(bx(x), bx(y))).boxed();
+                .map(|(x, y)| Expr::Pt2(bx(x), bx(y)))
+                .boxed();
             let pt3 = p
                 .clone()
                 .then_ignore(just(Tk::Comma))
@@ -109,10 +116,12 @@ fn parser<'src>() -> impl Parser<'src, &'src [Token], Spanned<Expr>, extra::Full
                 .then_ignore(just(Tk::Comma))
                 .then(p.clone())
                 .delimited_by(just(Tk::LParen), just(Tk::RParen))
-                .map(|((x, y), z)| Expr::Pt3(bx(x), bx(y), bx(z))).boxed();
+                .map(|((x, y), z)| Expr::Pt3(bx(x), bx(y), bx(z)))
+                .boxed();
             let num = select! {Tk::Num(n) => Expr::Num(n)}.boxed();
             let ident = select! {Tk::Ident(s) => Expr::Ident(s)}.boxed();
-            choice((pt3, pt2, list, parenthesized, num, ident)).map_with(|x, e| Spanned(x, e.span()))
+            choice((pt3, pt2, list, parenthesized, num, ident))
+                .map_with(|x, e| Spanned(x, e.span()))
         };
 
         let comp = select! {
@@ -173,40 +182,49 @@ fn parser<'src>() -> impl Parser<'src, &'src [Token], Spanned<Expr>, extra::Full
                     elsse: elsse.map(bx),
                 },
             )
-            .map_with(|x, e| Spanned(x, e.span())).boxed();
+            .map_with(|x, e| Spanned(x, e.span()))
+            .boxed();
 
         let unary = just(Tk::Minus)
             .repeated()
-            .foldr_with(atom, |_op, rhs,e| Spanned(Expr::Neg(bx(rhs)), e.span()));
+            .foldr_with(atom, |_op, rhs, e| Spanned(Expr::Neg(bx(rhs)), e.span()));
 
-        let pow = unary
-            .clone()
-            .foldl_with(just(Tk::Power).then(unary).repeated(), |lhs, (_op, rhs), e| {
-                Spanned(Expr::Pow(bx(lhs), bx(rhs)), e.span())
-            });
+        let pow = unary.clone().foldl_with(
+            just(Tk::Power).then(unary).repeated(),
+            |lhs, (_op, rhs), e| Spanned(Expr::Pow(bx(lhs), bx(rhs)), e.span()),
+        );
 
         let product = pow.clone().foldl_with(
             just(Tk::Multiply).or(just(Tk::Divide)).then(pow).repeated(),
-            |lhs, (op, rhs),e| Spanned(match op {
-                Tk::Multiply => Expr::Mul(bx(lhs), bx(rhs)),
-                Tk::Divide => Expr::Div(bx(lhs), bx(rhs)),
-                _ => unreachable!(),
-            }, e.span()),
+            |lhs, (op, rhs), e| {
+                Spanned(
+                    match op {
+                        Tk::Multiply => Expr::Mul(bx(lhs), bx(rhs)),
+                        Tk::Divide => Expr::Div(bx(lhs), bx(rhs)),
+                        _ => unreachable!(),
+                    },
+                    e.span(),
+                )
+            },
         );
 
         let out = product
             .clone()
             .foldl_with(
                 just(Tk::Plus).or(just(Tk::Minus)).then(product).repeated(),
-                |lhs, (op, rhs),e| Spanned(match op {
-                    Tk::Plus => Expr::Add(bx(lhs), bx(rhs)),
-                    Tk::Minus => Expr::Sub(bx(lhs), bx(rhs)),
-                    _ => unreachable!(),
-                },e.span()),
+                |lhs, (op, rhs), e| {
+                    Spanned(
+                        match op {
+                            Tk::Plus => Expr::Add(bx(lhs), bx(rhs)),
+                            Tk::Minus => Expr::Sub(bx(lhs), bx(rhs)),
+                            _ => unreachable!(),
+                        },
+                        e.span(),
+                    )
+                },
             )
             .boxed();
-        out
-            .or(iff)
+        out.or(iff)
     })
 }
 
@@ -226,7 +244,7 @@ bitflags! {
 pub fn verify(ast: &Spanned<Expr>, flags: &mut VerifyFlags) {
     let x = &ast.0;
     let s = ast.1;
-    
+
     match x {
         Expr::Ident(_) => {}
         Expr::Num(_) => {}
@@ -252,7 +270,6 @@ pub fn verify(ast: &Spanned<Expr>, flags: &mut VerifyFlags) {
             }
         }
         Expr::Pt3(x, y, z) => {
-
             if flags.contains(VerifyFlags::PT_OF_PT) {
                 error!("[{s}] Error: Point of point")
             } else {
@@ -269,6 +286,15 @@ pub fn verify(ast: &Spanned<Expr>, flags: &mut VerifyFlags) {
         Expr::Div(_, _) => {}
         Expr::Mul(_, _) => {}
         Expr::Pow(_, _) => {}
-        Expr::If { lh_cmp, cmp, rh_cmp, cmp2, rrh_cmp, body, elifs, elsse } => {}
+        Expr::If {
+            lh_cmp,
+            cmp,
+            rh_cmp,
+            cmp2,
+            rrh_cmp,
+            body,
+            elifs,
+            elsse,
+        } => {}
     }
 }
