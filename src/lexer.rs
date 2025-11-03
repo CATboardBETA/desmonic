@@ -108,8 +108,5 @@ pub fn lex<T: AsRef<Path>>(input: T, v: bool) -> Vec<Token> {
             }
         }
     }
-    if v {
-        info!("Done.")
-    }
     tokens
 }

@@ -1,9 +1,12 @@
+#![allow(dead_code)]
 use crate::lexer::lex;
-use crate::parser::parse;
+use crate::parser::{VerifyFlags, parse, verify, Spanned, Expr};
 use clap::builder::styling;
 use clap::{Parser, Subcommand};
-use log::{debug, info};
+use log::{LevelFilter, trace, info};
+use crate::eval::eval;
 
+mod eval;
 mod lexer;
 mod parser;
 
@@ -64,7 +67,9 @@ enum Commands {
 fn main() {
     let args = Args::parse();
 
-    colog::init();
+    colog::default_builder()
+        .filter_level(LevelFilter::Debug)
+        .init();
 
     match args.command {
         Commands::Build {
@@ -96,6 +101,12 @@ fn open(input: String, port: u16, v: bool) {
 
 fn compile(input: String, output: Option<String>, v: bool) {
     let lexed = lex(input, v);
-    info!("Lexed output: {lexed:?}");
+    trace!("Lexed output: {lexed:?}");
     let parsed = parse(lexed, v);
+    trace!("Parsed output:\n{parsed:#?}");
+    if v {
+        info!("Verifying AST...")
+    }
+    verify(&parsed, &mut VerifyFlags::empty());
+    eval(parsed)
 }
