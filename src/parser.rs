@@ -5,7 +5,7 @@ use bitflags::bitflags;
 use chumsky::prelude::*;
 use log::{error, info};
 use std::ops::Deref;
-use std::process;
+use std::process::exit;
 
 #[derive(Debug, PartialEq)]
 pub struct Elif {
@@ -55,6 +55,13 @@ pub enum Expr {
         elifs: Vec<Elif>,
         elsse: Option<Box<Else>>,
     },
+
+    // Statements
+    Ineq {
+        lhs: Box<Spanned<Expr>>,
+        cmp: ComparisonOp,
+        rhs: Box<Spanned<Expr>>,
+    },
 }
 
 #[derive(Debug, PartialEq)]
@@ -68,7 +75,7 @@ impl<T> Deref for Spanned<T> {
     }
 }
 
-pub fn parse(input: Vec<Token>, v: bool) -> Spanned<Expr> {
+pub fn parse(input: Vec<Token>, v: bool) -> Vec<Spanned<Expr>> {
     if v {
         info!("Parsing input...");
     }
@@ -81,14 +88,14 @@ pub fn parse(input: Vec<Token>, v: bool) -> Spanned<Expr> {
         for err in output.err().unwrap() {
             error!("Error occured in parsing: {err:?}");
         }
-        process::exit(1)
+        exit(1)
     }
 }
 
 fn parser<'src>()
--> impl Parser<'src, &'src [Token], Spanned<Expr>, extra::Full<Rich<'src, Token>, (), ()>> {
+-> impl Parser<'src, &'src [Token], Vec<Spanned<Expr>>, extra::Full<Rich<'src, Token>, (), ()>> {
     use crate::lexer::Token as Tk;
-    recursive(|p| {
+    let expr = recursive(|p| {
         let atom = {
             let parenthesized = p
                 .clone()
@@ -226,6 +233,24 @@ fn parser<'src>()
             .boxed();
         out.or(iff)
     })
+    .boxed();
+    let stmt = choice((expr
+        .clone()
+        .then(select! {
+            Tk::Comparison(c) => c
+        })
+        .then(expr.clone())
+        .map_with(|((lhs, cmp), rhs), e| {
+            Spanned(
+                Expr::Ineq {
+                    lhs: bx(lhs),
+                    cmp,
+                    rhs: bx(rhs),
+                },
+                e.span(),
+            )
+        }),));
+    stmt.or(expr).repeated().collect::<Vec<_>>()
 }
 
 fn bx<T>(x: T) -> Box<T> {
@@ -233,7 +258,6 @@ fn bx<T>(x: T) -> Box<T> {
 }
 
 bitflags! {
-    /// Flags from the UART flag register.
     #[repr(transparent)]
     #[derive(Copy, Clone, Debug, Eq, PartialEq)]
     pub struct VerifyFlags: u8 {
@@ -244,13 +268,14 @@ bitflags! {
 pub fn verify(ast: &Spanned<Expr>, flags: &mut VerifyFlags) {
     let x = &ast.0;
     let s = ast.1;
-
+    let mut  exiting = false;
     match x {
         Expr::Ident(_) => {}
         Expr::Num(_) => {}
         Expr::List(l) => {
             if flags.contains(VerifyFlags::LIST_OF_LIST) {
-                error!("[{s}] Error: List of list")
+                error!("[{s}] Error: List of list");
+                exiting = true;
             } else {
                 flags.set(VerifyFlags::LIST_OF_LIST, true);
                 for x in l {
@@ -261,7 +286,8 @@ pub fn verify(ast: &Spanned<Expr>, flags: &mut VerifyFlags) {
         }
         Expr::Pt2(x, y) => {
             if flags.contains(VerifyFlags::PT_OF_PT) {
-                error!("[{s}] Error: Point of point")
+                error!("[{s}] Error: Point of point");
+                exiting=true
             } else {
                 flags.set(VerifyFlags::PT_OF_PT, true);
                 verify(x.as_ref(), flags);
@@ -271,7 +297,8 @@ pub fn verify(ast: &Spanned<Expr>, flags: &mut VerifyFlags) {
         }
         Expr::Pt3(x, y, z) => {
             if flags.contains(VerifyFlags::PT_OF_PT) {
-                error!("[{s}] Error: Point of point")
+                error!("[{s}] Error: Point of point");
+                exiting = true
             } else {
                 flags.set(VerifyFlags::PT_OF_PT, true);
                 verify(x.as_ref(), flags);
@@ -286,15 +313,34 @@ pub fn verify(ast: &Spanned<Expr>, flags: &mut VerifyFlags) {
         Expr::Div(_, _) => {}
         Expr::Mul(_, _) => {}
         Expr::Pow(_, _) => {}
-        Expr::If {
-            lh_cmp,
-            cmp,
-            rh_cmp,
-            cmp2,
-            rrh_cmp,
-            body,
-            elifs,
-            elsse,
-        } => {}
+        Expr::If { cmp, cmp2, elifs, .. } => {
+            if matches!(cmp, ComparisonOp::IneqEq) {
+                error!("You cannot use a single eq in an if statement");
+                exiting = true
+            }
+            if matches!(cmp2.unwrap_or(ComparisonOp::Eq), ComparisonOp::IneqEq) {
+                error!("You cannot use a single eq in an if statement");
+                exiting = true
+            }
+            for elif in elifs {
+                if matches!(elif.cmp, ComparisonOp::IneqEq) {
+                    error!("You cannot use a single eq in an if statement");
+                    exiting = true
+                }
+                if matches!(elif.cmp2.unwrap_or(ComparisonOp::Eq), ComparisonOp::IneqEq) {
+                    error!("You cannot use a single eq in an if statement");
+                    exiting = true
+                }
+            }
+        }
+        Expr::Ineq { cmp, .. } => {
+            if matches!(cmp, ComparisonOp::Eq) {
+                error!("You cannot use a double eq in an inequality");
+                exiting = true
+            }
+        }
+    }
+    if exiting {
+        exit(1)
     }
 }

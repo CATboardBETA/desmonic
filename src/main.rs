@@ -100,13 +100,21 @@ fn open(input: String, port: u16, v: bool) {
 }
 
 fn compile(input: String, output: Option<String>, v: bool) {
-    let lexed = lex(input, v);
-    trace!("Lexed output: {lexed:?}");
-    let parsed = parse(lexed, v);
-    trace!("Parsed output:\n{parsed:#?}");
+    let lexed = lex(&input, v);
     if v {
+        trace!("Lexed output: {lexed:?}");
+    }
+    let parsed = parse(lexed, v);
+    if v {
+        trace!("Parsed output:\n{parsed:#?}");
         info!("Verifying AST...")
     }
-    verify(&parsed, &mut VerifyFlags::empty());
-    println!("expression: {}", eval(parsed));
+    for expr in &parsed {
+        verify(expr, &mut VerifyFlags::empty());
+    }
+    for expr in parsed {
+        println!("expression: {}", eval(expr));
+    }
+    let _output_file =
+        output.unwrap_or_else(|| format!("{}.json", input.trim_end_matches(".desm")));
 }

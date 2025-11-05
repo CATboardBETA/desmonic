@@ -11,6 +11,7 @@ pub enum ComparisonOp {
     Lt,
     Gt,
     Eq,
+    IneqEq
 }
 
 impl FromStr for ComparisonOp {
@@ -23,7 +24,8 @@ impl FromStr for ComparisonOp {
             ">=" => Ok(Ge),
             "<" => Ok(Lt),
             ">" => Ok(Gt),
-            "==" | "=" => Ok(Eq),
+            "=="=> Ok(Eq),
+            "=" => Ok(IneqEq),
             _ => unreachable!("infallible, due to logos"),
         }
     }

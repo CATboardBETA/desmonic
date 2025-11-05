@@ -84,15 +84,22 @@ pub fn eval(Spanned(e, s): Spanned<Expr>) -> String {
                 else_s
             )
         }
+        Expr::Ineq { lhs, cmp, rhs } => {
+            format!("{}{}{}",
+            eval(*lhs),
+            ecmp(cmp),
+            eval(*rhs))
+        }
     }
 }
 
 pub fn ecmp(cmp: ComparisonOp) -> &'static str {
     match cmp {
-        ComparisonOp::Le => "\\le",
-        ComparisonOp::Ge => "\\le",
-        ComparisonOp::Lt => "\\lt",
-        ComparisonOp::Gt => "\\gt",
-        ComparisonOp::Eq => "\\eq",
+        ComparisonOp::Le => "\\le ",
+        ComparisonOp::Ge => "\\le ",
+        ComparisonOp::Lt => "\\lt ",
+        ComparisonOp::Gt => "\\gt ",
+        ComparisonOp::Eq |
+        ComparisonOp::IneqEq => " = ",
     }
 }
