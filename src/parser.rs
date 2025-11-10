@@ -55,6 +55,10 @@ pub enum Expr {
         elifs: Vec<Elif>,
         elsse: Option<Box<Else>>,
     },
+    Call {
+        name: String,
+        params: Vec<Spanned<Expr>>,
+    },
 
     // Statements
     Ineq {
@@ -105,22 +109,19 @@ fn parser<'src>()
             let parenthesized = p
                 .clone()
                 .map(|x: Spanned<Expr>| x.0)
-                .delimited_by(just(Tk::LParen), just(Tk::RParen))
-                .boxed();
+                .delimited_by(just(Tk::LParen), just(Tk::RParen));
             let list = p
                 .clone()
                 .separated_by(just(Tk::Comma))
                 .collect::<Vec<_>>()
                 .map(Expr::List)
-                .delimited_by(just(Tk::LBracket), just(Tk::RBracket))
-                .boxed();
+                .delimited_by(just(Tk::LBracket), just(Tk::RBracket));
             let pt2 = p
                 .clone()
                 .then_ignore(just(Tk::Comma))
                 .then(p.clone())
                 .delimited_by(just(Tk::LParen), just(Tk::RParen))
-                .map(|(x, y)| Expr::Pt2(bx(x), bx(y)))
-                .boxed();
+                .map(|(x, y)| Expr::Pt2(bx(x), bx(y)));
             let pt3 = p
                 .clone()
                 .then_ignore(just(Tk::Comma))
@@ -128,11 +129,20 @@ fn parser<'src>()
                 .then_ignore(just(Tk::Comma))
                 .then(p.clone())
                 .delimited_by(just(Tk::LParen), just(Tk::RParen))
-                .map(|((x, y), z)| Expr::Pt3(bx(x), bx(y), bx(z)))
-                .boxed();
-            let num = select! {Tk::Num(n) => Expr::Num(n)}.boxed();
-            let ident = select! {Tk::Ident(s) => Expr::Ident(s)}.boxed();
-            choice((pt3, pt2, list, parenthesized, num, ident))
+                .map(|((x, y), z)| Expr::Pt3(bx(x), bx(y), bx(z)));
+            let num = select! {Tk::Num(n) => Expr::Num(n)};
+            let ident = select! {Tk::Ident(s) => Expr::Ident(s)};
+            let call = select! {Tk::Ident(s) => s}
+                .clone()
+                .then(
+                    p.clone()
+                        .separated_by(just(Tk::Comma))
+                        .allow_trailing()
+                        .collect::<Vec<_>>()
+                        .delimited_by(just(Tk::LParen), just(Tk::RParen)),
+                )
+                .map(|(name, params)| Expr::Call { name, params });
+            choice((pt3, pt2, list, parenthesized, num, call, ident))
                 .map_with(|x, e| Spanned(x, e.span()))
         };
 
@@ -382,6 +392,7 @@ pub fn verify(ast: &Spanned<Expr>, flags: &mut VerifyFlags) {
             verify(body, flags);
             flags.set(VerifyFlags::FN_IN_FN, false);
         }
+        Expr::Call { .. } => {}
     }
     if exiting {
         exit(1)
