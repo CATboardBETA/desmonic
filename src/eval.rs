@@ -86,18 +86,32 @@ pub fn eval(Spanned(e, _): Spanned<Expr>) -> String {
             )
         }
         Expr::Ineq { lhs, cmp, rhs } => format!("{}{}{}", eval(*lhs), ecmp(cmp), eval(*rhs)),
-        Expr::Def { name, args, body } => {
+        Expr::Def { mut name, args, body } => {
+            let (start, rest) = name.split_at(1);
+            name = if rest.is_empty() {
+                start.to_string()
+            } else {
+                format!("{start}_{{{rest}}}")
+            };
             format!("{}\\left({}\\right)={}", name, args.join(" "), eval(*body))
         }
-        Expr::Call { name, params } => format!(
-            "{}\\left({}\\right)",
-            name,
-            params
-                .into_iter()
-                .map(eval)
-                .collect::<Vec<String>>()
-                .join(" ")
-        ),
+        Expr::Call { mut name, params } => {
+            let (start, rest) = name.split_at(1);
+            name = if rest.is_empty() {
+                start.to_string()
+            } else {
+                format!("{start}_{{{rest}}}")
+            };
+            format!(
+                "{}\\left({}\\right)",
+                name,
+                params
+                    .into_iter()
+                    .map(eval)
+                    .collect::<Vec<String>>()
+                    .join(" ")
+            )
+        },
     }
 }
 
