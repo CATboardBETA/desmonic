@@ -62,6 +62,11 @@ pub enum Expr {
         cmp: ComparisonOp,
         rhs: Box<Spanned<Expr>>,
     },
+    Def {
+        name: String,
+        args: Vec<String>,
+        body: Box<Spanned<Expr>>,
+    },
 }
 
 #[derive(Debug, PartialEq)]
@@ -234,22 +239,47 @@ fn parser<'src>()
         out.or(iff)
     })
     .boxed();
-    let stmt = choice((expr
-        .clone()
-        .then(select! {
-            Tk::Comparison(c) => c
-        })
-        .then(expr.clone())
-        .map_with(|((lhs, cmp), rhs), e| {
-            Spanned(
-                Expr::Ineq {
-                    lhs: bx(lhs),
-                    cmp,
-                    rhs: bx(rhs),
-                },
-                e.span(),
+    let stmt = choice((
+        expr.clone()
+            .then(select! {
+                Tk::Comparison(c) => c
+            })
+            .then(expr.clone())
+            .map_with(|((lhs, cmp), rhs), e| {
+                Spanned(
+                    Expr::Ineq {
+                        lhs: bx(lhs),
+                        cmp,
+                        rhs: bx(rhs),
+                    },
+                    e.span(),
+                )
+            }),
+        just(Tk::Keyword(Keyword::Fn))
+            .ignore_then(select! { Tk::Ident(s) => s })
+            .then_ignore(just(Tk::LParen))
+            .then(
+                select! { Tk::Ident(s) => s }
+                    .separated_by(just(Tk::Comma))
+                    .allow_trailing()
+                    .collect::<Vec<_>>(),
             )
-        }),));
+            .then_ignore(just(Tk::RParen))
+            .then(
+                expr.clone()
+                    .delimited_by(just(Tk::LBrace), just(Tk::RBrace)),
+            )
+            .map_with(|((name, args), body), e| {
+                Spanned(
+                    Expr::Def {
+                        name,
+                        args,
+                        body: bx(body),
+                    },
+                    e.span(),
+                )
+            }),
+    ));
     stmt.or(expr).repeated().collect::<Vec<_>>()
 }
 
@@ -263,12 +293,13 @@ bitflags! {
     pub struct VerifyFlags: u8 {
         const LIST_OF_LIST = 1 << 0;
         const PT_OF_PT = 1 << 1;
+        const FN_IN_FN = 1 << 2;
     }
 }
 pub fn verify(ast: &Spanned<Expr>, flags: &mut VerifyFlags) {
     let x = &ast.0;
     let s = ast.1;
-    let mut  exiting = false;
+    let mut exiting = false;
     match x {
         Expr::Ident(_) => {}
         Expr::Num(_) => {}
@@ -287,7 +318,7 @@ pub fn verify(ast: &Spanned<Expr>, flags: &mut VerifyFlags) {
         Expr::Pt2(x, y) => {
             if flags.contains(VerifyFlags::PT_OF_PT) {
                 error!("[{s}] Error: Point of point");
-                exiting=true
+                exiting = true
             } else {
                 flags.set(VerifyFlags::PT_OF_PT, true);
                 verify(x.as_ref(), flags);
@@ -313,7 +344,9 @@ pub fn verify(ast: &Spanned<Expr>, flags: &mut VerifyFlags) {
         Expr::Div(_, _) => {}
         Expr::Mul(_, _) => {}
         Expr::Pow(_, _) => {}
-        Expr::If { cmp, cmp2, elifs, .. } => {
+        Expr::If {
+            cmp, cmp2, elifs, ..
+        } => {
             if matches!(cmp, ComparisonOp::IneqEq) {
                 error!("You cannot use a single eq in an if statement");
                 exiting = true
@@ -338,6 +371,16 @@ pub fn verify(ast: &Spanned<Expr>, flags: &mut VerifyFlags) {
                 error!("You cannot use a double eq in an inequality");
                 exiting = true
             }
+        }
+        Expr::Def { body, .. } => {
+            if flags.contains(VerifyFlags::FN_IN_FN) {
+                error!("[internal] Functions within functions are not yet implemented.");
+                exiting = true
+            }
+
+            flags.set(VerifyFlags::FN_IN_FN, true);
+            verify(body, flags);
+            flags.set(VerifyFlags::FN_IN_FN, false);
         }
     }
     if exiting {

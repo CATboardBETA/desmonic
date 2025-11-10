@@ -11,7 +11,7 @@ pub enum ComparisonOp {
     Lt,
     Gt,
     Eq,
-    IneqEq
+    IneqEq,
 }
 
 impl FromStr for ComparisonOp {
@@ -24,7 +24,7 @@ impl FromStr for ComparisonOp {
             ">=" => Ok(Ge),
             "<" => Ok(Lt),
             ">" => Ok(Gt),
-            "=="=> Ok(Eq),
+            "==" => Ok(Eq),
             "=" => Ok(IneqEq),
             _ => unreachable!("infallible, due to logos"),
         }
@@ -33,6 +33,7 @@ impl FromStr for ComparisonOp {
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum Keyword {
+    Fn,
     If,
     Elif,
     Else,
@@ -44,6 +45,7 @@ impl FromStr for Keyword {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         use Keyword::*;
         match s {
+            "fn" => Ok(Fn),
             "if" => Ok(If),
             "elif" => Ok(Elif),
             "else" => Ok(Else),
@@ -56,7 +58,7 @@ impl FromStr for Keyword {
 #[derive(Clone, Logos, Debug, PartialEq)]
 #[logos(skip r"[[:space:]]+")]
 pub enum Token {
-    #[regex(r"if|elif|else", |lex| lex.slice().parse::<Keyword>().unwrap(), priority = 10000)]
+    #[regex(r"fn|if|elif|else", |lex| lex.slice().parse::<Keyword>().unwrap(), priority = 10000)]
     Keyword(Keyword),
     #[token("(")]
     LParen,

@@ -1,7 +1,7 @@
 use crate::lexer::ComparisonOp;
 use crate::parser::{Expr, Spanned};
 
-pub fn eval(Spanned(e, s): Spanned<Expr>) -> String {
+pub fn eval(Spanned(e, _): Spanned<Expr>) -> String {
     match e {
         Expr::Ident(x) => {
             let (start, rest) = x.split_at(1);
@@ -85,10 +85,12 @@ pub fn eval(Spanned(e, s): Spanned<Expr>) -> String {
             )
         }
         Expr::Ineq { lhs, cmp, rhs } => {
-            format!("{}{}{}",
-            eval(*lhs),
-            ecmp(cmp),
-            eval(*rhs))
+            format!("{}{}{}", eval(*lhs), ecmp(cmp), eval(*rhs))
+        }
+        Expr::Def { name, args, body } => {
+            let args = args.join(" ");
+
+            format!("{}\\left({}\\right)={}", name, args, eval(*body))
         }
     }
 }
@@ -99,7 +101,6 @@ pub fn ecmp(cmp: ComparisonOp) -> &'static str {
         ComparisonOp::Ge => "\\le ",
         ComparisonOp::Lt => "\\lt ",
         ComparisonOp::Gt => "\\gt ",
-        ComparisonOp::Eq |
-        ComparisonOp::IneqEq => " = ",
+        ComparisonOp::Eq | ComparisonOp::IneqEq => " = ",
     }
 }
