@@ -1,6 +1,5 @@
 use crate::lexer::ComparisonOp;
 use crate::parser::{Expr, Spanned};
-use std::ops::Deref;
 
 pub fn eval(Spanned(e, _): Spanned<Expr>) -> String {
     match e {
@@ -86,7 +85,11 @@ pub fn eval(Spanned(e, _): Spanned<Expr>) -> String {
             )
         }
         Expr::Ineq { lhs, cmp, rhs } => format!("{}{}{}", eval(*lhs), ecmp(cmp), eval(*rhs)),
-        Expr::Def { mut name, args, body } => {
+        Expr::Def {
+            mut name,
+            args,
+            body,
+        } => {
             let (start, rest) = name.split_at(1);
             name = if rest.is_empty() {
                 start.to_string()
@@ -111,7 +114,7 @@ pub fn eval(Spanned(e, _): Spanned<Expr>) -> String {
                     .collect::<Vec<String>>()
                     .join(" ")
             )
-        },
+        }
     }
 }
 

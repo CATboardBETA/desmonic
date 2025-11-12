@@ -1,7 +1,6 @@
 #![allow(dead_code)]
 
 use crate::lexer::{ComparisonOp, Keyword, Token};
-use bitflags::bitflags;
 use chumsky::prelude::*;
 use log::{error, info};
 use std::ops::Deref;
@@ -133,7 +132,6 @@ fn parser<'src>()
             let num = select! {Tk::Num(n) => Expr::Num(n)};
             let ident = select! {Tk::Ident(s) => Expr::Ident(s)};
             let call = select! {Tk::Ident(s) => s}
-                .clone()
                 .then(
                     p.clone()
                         .separated_by(just(Tk::Comma))
@@ -295,106 +293,4 @@ fn parser<'src>()
 
 fn bx<T>(x: T) -> Box<T> {
     Box::new(x)
-}
-
-bitflags! {
-    #[repr(transparent)]
-    #[derive(Copy, Clone, Debug, Eq, PartialEq)]
-    pub struct VerifyFlags: u8 {
-        const LIST_OF_LIST = 1 << 0;
-        const PT_OF_PT = 1 << 1;
-        const FN_IN_FN = 1 << 2;
-    }
-}
-pub fn verify(ast: &Spanned<Expr>, flags: &mut VerifyFlags) {
-    let x = &ast.0;
-    let s = ast.1;
-    let mut exiting = false;
-    match x {
-        Expr::Ident(_) => {}
-        Expr::Num(_) => {}
-        Expr::List(l) => {
-            if flags.contains(VerifyFlags::LIST_OF_LIST) {
-                error!("[{s}] Error: List of list");
-                exiting = true;
-            } else {
-                flags.set(VerifyFlags::LIST_OF_LIST, true);
-                for x in l {
-                    verify(x, flags)
-                }
-                flags.set(VerifyFlags::LIST_OF_LIST, false)
-            }
-        }
-        Expr::Pt2(x, y) => {
-            if flags.contains(VerifyFlags::PT_OF_PT) {
-                error!("[{s}] Error: Point of point");
-                exiting = true
-            } else {
-                flags.set(VerifyFlags::PT_OF_PT, true);
-                verify(x.as_ref(), flags);
-                verify(y.as_ref(), flags);
-                flags.set(VerifyFlags::PT_OF_PT, false)
-            }
-        }
-        Expr::Pt3(x, y, z) => {
-            if flags.contains(VerifyFlags::PT_OF_PT) {
-                error!("[{s}] Error: Point of point");
-                exiting = true
-            } else {
-                flags.set(VerifyFlags::PT_OF_PT, true);
-                verify(x.as_ref(), flags);
-                verify(y.as_ref(), flags);
-                verify(z.as_ref(), flags);
-                flags.set(VerifyFlags::PT_OF_PT, false)
-            }
-        }
-        Expr::Neg(_) => {}
-        Expr::Add(_, _) => {}
-        Expr::Sub(_, _) => {}
-        Expr::Div(_, _) => {}
-        Expr::Mul(_, _) => {}
-        Expr::Pow(_, _) => {}
-        Expr::If {
-            cmp, cmp2, elifs, ..
-        } => {
-            if matches!(cmp, ComparisonOp::IneqEq) {
-                error!("You cannot use a single eq in an if statement");
-                exiting = true
-            }
-            if matches!(cmp2.unwrap_or(ComparisonOp::Eq), ComparisonOp::IneqEq) {
-                error!("You cannot use a single eq in an if statement");
-                exiting = true
-            }
-            for elif in elifs {
-                if matches!(elif.cmp, ComparisonOp::IneqEq) {
-                    error!("You cannot use a single eq in an if statement");
-                    exiting = true
-                }
-                if matches!(elif.cmp2.unwrap_or(ComparisonOp::Eq), ComparisonOp::IneqEq) {
-                    error!("You cannot use a single eq in an if statement");
-                    exiting = true
-                }
-            }
-        }
-        Expr::Ineq { cmp, .. } => {
-            if matches!(cmp, ComparisonOp::Eq) {
-                error!("You cannot use a double eq in an inequality");
-                exiting = true
-            }
-        }
-        Expr::Def { body, .. } => {
-            if flags.contains(VerifyFlags::FN_IN_FN) {
-                error!("[internal] Functions within functions are not yet implemented.");
-                exiting = true
-            }
-
-            flags.set(VerifyFlags::FN_IN_FN, true);
-            verify(body, flags);
-            flags.set(VerifyFlags::FN_IN_FN, false);
-        }
-        Expr::Call { .. } => {}
-    }
-    if exiting {
-        exit(1)
-    }
 }

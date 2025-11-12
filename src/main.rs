@@ -1,14 +1,19 @@
 #![allow(dead_code)]
+
 use crate::eval::eval;
 use crate::lexer::lex;
-use crate::parser::{Expr, Spanned, VerifyFlags, parse, verify};
+use crate::parser::parse;
+use crate::verify::verify;
 use clap::builder::styling;
 use clap::{Parser, Subcommand};
 use log::{LevelFilter, info, trace};
+use std::collections::HashSet;
+use std::process::exit;
 
 mod eval;
 mod lexer;
 mod parser;
+mod verify;
 
 const STYLES: styling::Styles = styling::Styles::styled()
     .header(styling::AnsiColor::Green.on_default().bold())
@@ -91,11 +96,11 @@ fn main() {
     }
 }
 
-fn run(input: String, output: Option<String>, port: u16, v: bool) {
+fn run(_input: String, _output: Option<String>, _port: u16, _v: bool) {
     todo!()
 }
 
-fn open(input: String, port: u16, v: bool) {
+fn open(_input: String, _port: u16, _v: bool) {
     todo!()
 }
 
@@ -110,7 +115,9 @@ fn compile(input: String, output: Option<String>, v: bool) {
         info!("Verifying AST...")
     }
     for expr in &parsed {
-        verify(expr, &mut VerifyFlags::empty());
+        if verify(expr, &mut HashSet::new(), &input) {
+            exit(1)
+        };
     }
     for expr in parsed {
         println!("expression: {}", eval(expr));

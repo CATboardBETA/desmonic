@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-bitflags = { version = "2.10.0", features = ["std"] }
+ariadne = "0.6.0"
 chumsky = { version = "0.11.1" }
 clap = { version = "4.5.50", features = ["derive"] }
 colog = "1.4.0"

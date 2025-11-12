@@ -2,6 +2,7 @@ use log::{error, info};
 use logos::Logos;
 use std::fs;
 use std::path::Path;
+use std::process::exit;
 use std::str::FromStr;
 
 #[derive(Copy, Clone, Debug, PartialEq)]
@@ -55,9 +56,48 @@ impl FromStr for Keyword {
     }
 }
 
+#[derive(Clone, Debug, PartialEq)]
+
+enum Type {
+    Action,
+    Num,
+    Point3,
+    Point,
+    List(Box<Type>)
+}
+
+impl FromStr for Type {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        use Type::*;
+        if s.starts_with("#List") {
+            let s = s.trim_start_matches("#List<");
+            let s = s.trim_end_matches('>');
+            Ok(List(Box::new(match s {
+                "Action" => Action,
+                "Num" => Num,
+                "Point3" => Point3,
+                "Point" => Point,
+                _ => unreachable!("infallible, due to logos")
+            })))
+        } else {
+            Ok(match s {
+                "#Action" => Action,
+                "#Num" => Num,
+                "#Point3" => Point3,
+                "#Point" => Point,
+                _ => unreachable!("infallible, due to logos")
+            })
+        }
+    }
+}
+
 #[derive(Clone, Logos, Debug, PartialEq)]
 #[logos(skip r"[[:space:]]+")]
 pub enum Token {
+    #[regex(r"#(?:Action|Num|Point3|Point|List<(?:Action|Num|Point|Point3)>)", |lex| lex.slice().parse::<Type>().unwrap())]
+    Type(Type),
     #[regex(r"fn|if|elif|else", |lex| lex.slice().parse::<Keyword>().unwrap(), priority = 10000)]
     Keyword(Keyword),
     #[token("(")]
@@ -104,13 +144,18 @@ pub fn lex<T: AsRef<Path>>(input: T, v: bool) -> Vec<Token> {
     }
 
     let mut tokens = vec![];
+    let mut exiting = false;
     for (token, span) in Token::lexer(&fs::read_to_string(path).unwrap()).spanned() {
         match token {
             Ok(token) => tokens.push(token),
-            Err(e) => {
-                error!("[byte {span:?}] Unexpected lexer error");
+            Err(_) => {
+                error!("[byte {span:?}] Unexpected token");
+                exiting = true;
             }
         }
+    }
+    if exiting {
+        exit(1)
     }
     tokens
 }
