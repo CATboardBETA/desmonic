@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use crate::lexer::{ComparisonOp, Keyword, Token};
+use crate::lexer::{ComparisonOp, Keyword, Token, Type};
 use chumsky::prelude::*;
 use log::{error, info};
 use std::ops::Deref;
@@ -73,7 +73,7 @@ pub enum Expr {
 }
 
 #[derive(Debug, PartialEq)]
-pub struct Spanned<T>(pub T, pub SimpleSpan<usize>);
+pub struct Spanned<T>(pub T, pub SimpleSpan<usize>, pub Type);
 
 impl<T> Deref for Spanned<T> {
     type Target = T;
@@ -94,7 +94,7 @@ pub fn parse(input: Vec<Token>, v: bool) -> Vec<Spanned<Expr>> {
         output
     } else {
         for err in output.err().unwrap() {
-            error!("Error occured in parsing: {err:?}");
+            error!("Error occurred in parsing: {err:?}");
         }
         exit(1)
     }
@@ -102,25 +102,30 @@ pub fn parse(input: Vec<Token>, v: bool) -> Vec<Spanned<Expr>> {
 
 fn parser<'src>()
 -> impl Parser<'src, &'src [Token], Vec<Spanned<Expr>>, extra::Full<Rich<'src, Token>, (), ()>> {
+    use Type as TT;
     use crate::lexer::Token as Tk;
     let expr = recursive(|p| {
+   
         let atom = {
             let parenthesized = p
                 .clone()
                 .map(|x: Spanned<Expr>| x.0)
-                .delimited_by(just(Tk::LParen), just(Tk::RParen));
+                .delimited_by(just(Tk::LParen), just(Tk::RParen))
+                .map_with(|x, e| Spanned(x, e.span(), TT::Infer));
             let list = p
                 .clone()
                 .separated_by(just(Tk::Comma))
                 .collect::<Vec<_>>()
                 .map(Expr::List)
-                .delimited_by(just(Tk::LBracket), just(Tk::RBracket));
+                .delimited_by(just(Tk::LBracket), just(Tk::RBracket))
+                .map_with(|x, e| Spanned(x, e.span(), TT::List(bx(TT::Infer))));
             let pt2 = p
                 .clone()
                 .then_ignore(just(Tk::Comma))
                 .then(p.clone())
                 .delimited_by(just(Tk::LParen), just(Tk::RParen))
-                .map(|(x, y)| Expr::Pt2(bx(x), bx(y)));
+                .map(|(x, y)| Expr::Pt2(bx(x), bx(y)))
+                .map_with(|x, e| Spanned(x, e.span(), TT::Point));
             let pt3 = p
                 .clone()
                 .then_ignore(just(Tk::Comma))
@@ -128,9 +133,12 @@ fn parser<'src>()
                 .then_ignore(just(Tk::Comma))
                 .then(p.clone())
                 .delimited_by(just(Tk::LParen), just(Tk::RParen))
-                .map(|((x, y), z)| Expr::Pt3(bx(x), bx(y), bx(z)));
-            let num = select! {Tk::Num(n) => Expr::Num(n)};
-            let ident = select! {Tk::Ident(s) => Expr::Ident(s)};
+                .map(|((x, y), z)| Expr::Pt3(bx(x), bx(y), bx(z)))
+                .map_with(|x, e| Spanned(x, e.span(), TT::Point3));
+            let num = select! {Tk::Num(n) => Expr::Num(n)}
+                .map_with(|x, e| Spanned(x, e.span(), TT::Num));
+            let ident = select! {Tk::Ident(s) => Expr::Ident(s)}
+                .map_with(|x, e| Spanned(x, e.span(), TT::Infer));
             let call = select! {Tk::Ident(s) => s}
                 .then(
                     p.clone()
@@ -139,9 +147,9 @@ fn parser<'src>()
                         .collect::<Vec<_>>()
                         .delimited_by(just(Tk::LParen), just(Tk::RParen)),
                 )
-                .map(|(name, params)| Expr::Call { name, params });
+                .map(|(name, params)| Expr::Call { name, params })
+                .map_with(|x, e| Spanned(x, e.span(), TT::Infer));
             choice((pt3, pt2, list, parenthesized, num, call, ident))
-                .map_with(|x, e| Spanned(x, e.span()))
         };
 
         let comp = select! {
@@ -202,16 +210,16 @@ fn parser<'src>()
                     elsse: elsse.map(bx),
                 },
             )
-            .map_with(|x, e| Spanned(x, e.span()))
+            .map_with(|x, e| Spanned(x, e.span(), TT::Infer))
             .boxed();
 
         let unary = just(Tk::Minus)
             .repeated()
-            .foldr_with(atom, |_op, rhs, e| Spanned(Expr::Neg(bx(rhs)), e.span()));
+            .foldr_with(atom, |_op, rhs, e| Spanned(Expr::Neg(bx(rhs)), e.span(), TT::Infer));
 
         let pow = unary.clone().foldl_with(
             just(Tk::Power).then(unary).repeated(),
-            |lhs, (_op, rhs), e| Spanned(Expr::Pow(bx(lhs), bx(rhs)), e.span()),
+            |lhs, (_op, rhs), e| Spanned(Expr::Pow(bx(lhs), bx(rhs)), e.span(), TT::Infer),
         );
 
         let product = pow.clone().foldl_with(
@@ -224,6 +232,7 @@ fn parser<'src>()
                         _ => unreachable!(),
                     },
                     e.span(),
+                    TT::Infer,
                 )
             },
         );
@@ -240,6 +249,7 @@ fn parser<'src>()
                             _ => unreachable!(),
                         },
                         e.span(),
+                        TT::Infer,
                     )
                 },
             )
@@ -261,6 +271,7 @@ fn parser<'src>()
                         rhs: bx(rhs),
                     },
                     e.span(),
+                    TT::Infer,
                 )
             }),
         just(Tk::Keyword(Keyword::Fn))
@@ -277,7 +288,8 @@ fn parser<'src>()
                 expr.clone()
                     .delimited_by(just(Tk::LBrace), just(Tk::RBrace)),
             )
-            .map_with(|((name, args), body), e| {
+            .then(select!{ Tk::Type(t) => t })
+            .map_with(|(((name, args), body), t), e| {
                 Spanned(
                     Expr::Def {
                         name,
@@ -285,6 +297,7 @@ fn parser<'src>()
                         body: bx(body),
                     },
                     e.span(),
+                    t,
                 )
             }),
     ));

@@ -1,7 +1,7 @@
 use crate::lexer::ComparisonOp;
 use crate::parser::{Expr, Spanned};
 
-pub fn eval(Spanned(e, _): Spanned<Expr>) -> String {
+pub fn eval(Spanned(e, _, _): Spanned<Expr>) -> String {
     match e {
         Expr::Ident(x) => {
             let (start, rest) = x.split_at(1);

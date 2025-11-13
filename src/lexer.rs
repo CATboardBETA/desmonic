@@ -57,13 +57,13 @@ impl FromStr for Keyword {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-
-enum Type {
+pub enum Type {
     Action,
     Num,
     Point3,
     Point,
-    List(Box<Type>)
+    List(Box<Type>),
+    Infer,
 }
 
 impl FromStr for Type {
