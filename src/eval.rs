@@ -13,10 +13,7 @@ pub fn eval(Spanned(e, _, _): Spanned<Expr>) -> String {
         }
         Expr::Num(n) => n,
         Expr::List(l) => {
-            let mut full = String::new();
-            for x in l {
-                full += &(eval(x) + ",")
-            }
+            let full=l.into_iter().map(eval).collect::<Vec<String>>().join(",");
             format!("\\left[{full}\\right]")
         }
         Expr::Pt2(x, y) => format!("\\left({},{}\\right)", eval(*x), eval(*y)),
