@@ -110,13 +110,16 @@ pub fn verify(ast: &Spanned<Expr>, flags: &mut VerifyFlags, file: &String) -> bo
         }
         Expr::Add(x, y) => {
             exiting |= verify(x, flags, file);
-            exiting |= verify(y, flags, file);}
+            exiting |= verify(y, flags, file);
+        }
         Expr::Sub(x, y) => {
             exiting |= verify(x, flags, file);
-            exiting |= verify(y, flags, file);}
+            exiting |= verify(y, flags, file);
+        }
         Expr::Div(x, y) => {
             exiting |= verify(x, flags, file);
-            exiting |= verify(y, flags, file);}
+            exiting |= verify(y, flags, file);
+        }
         Expr::Mul(x, y) => {
             exiting |= verify(x, flags, file);
             exiting |= verify(y, flags, file);
@@ -126,7 +129,14 @@ pub fn verify(ast: &Spanned<Expr>, flags: &mut VerifyFlags, file: &String) -> bo
             exiting |= verify(y, flags, file);
         }
         Expr::If {
-            lh_cmp, cmp, rh_cmp, cmp2, rrh_cmp, body, elifs, elsse
+            lh_cmp,
+            cmp,
+            rh_cmp,
+            cmp2,
+            rrh_cmp,
+            body,
+            elifs,
+            elsse,
         } => {
             if matches!(cmp, ComparisonOp::IneqEq) {
                 error!("You cannot use a single eq in an if statement");
@@ -137,7 +147,14 @@ pub fn verify(ast: &Spanned<Expr>, flags: &mut VerifyFlags, file: &String) -> bo
                 exiting = true
             }
             for elif in elifs {
-                let Elif { lh_cmp, cmp, rh_cmp, cmp2, rrh_cmp, body } = elif;
+                let Elif {
+                    lh_cmp,
+                    cmp,
+                    rh_cmp,
+                    cmp2,
+                    rrh_cmp,
+                    body,
+                } = elif;
                 if matches!(cmp, ComparisonOp::IneqEq) {
                     error!("You cannot use a single eq in an if statement");
                     exiting = true

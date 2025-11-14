@@ -1,5 +1,6 @@
 use log::{error, info};
 use logos::Logos;
+use std::fmt::{Display, Formatter};
 use std::fs;
 use std::path::Path;
 use std::process::exit;
@@ -13,6 +14,23 @@ pub enum ComparisonOp {
     Gt,
     Eq,
     IneqEq,
+}
+
+impl Display for ComparisonOp {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                ComparisonOp::Le => "<=",
+                ComparisonOp::Ge => ">=",
+                ComparisonOp::Lt => "<",
+                ComparisonOp::Gt => ">",
+                ComparisonOp::Eq => "==",
+                ComparisonOp::IneqEq => "=",
+            }
+        )
+    }
 }
 
 impl FromStr for ComparisonOp {
@@ -64,6 +82,8 @@ pub enum Type {
     Point,
     List(Box<Type>),
     Infer,
+    /// This is exclusively for inequalities, not `Expr::Ineq`, which includes equalities as well.
+    Ineq,
 }
 
 impl FromStr for Type {
@@ -79,7 +99,7 @@ impl FromStr for Type {
                 "Num" => Num,
                 "Point3" => Point3,
                 "Point" => Point,
-                _ => unreachable!("infallible, due to logos")
+                _ => unreachable!("infallible, due to logos"),
             })))
         } else {
             Ok(match s {
@@ -87,7 +107,7 @@ impl FromStr for Type {
                 "#Num" => Num,
                 "#Point3" => Point3,
                 "#Point" => Point,
-                _ => unreachable!("infallible, due to logos")
+                _ => unreachable!("infallible, due to logos"),
             })
         }
     }

@@ -1,18 +1,20 @@
 #![allow(dead_code)]
 
 use crate::eval::eval;
-use crate::lexer::lex;
+use crate::lexer::{Type, lex};
 use crate::parser::parse;
+use crate::types::infer_types;
 use crate::verify::verify;
 use clap::builder::styling;
 use clap::{Parser, Subcommand};
-use log::{LevelFilter, info, trace};
-use std::collections::HashSet;
+use log::{LevelFilter, debug, info, trace};
+use std::collections::{HashMap, HashSet};
 use std::process::exit;
 
 mod eval;
 mod lexer;
 mod parser;
+mod types;
 mod verify;
 
 const STYLES: styling::Styles = styling::Styles::styled()
@@ -109,10 +111,18 @@ fn compile(input: String, output: Option<String>, v: bool) {
     if v {
         trace!("Lexed output: {lexed:?}");
     }
-    let parsed = parse(lexed, v);
+    let mut parsed = parse(lexed, v);
     if v {
         trace!("Parsed output:\n{parsed:#?}");
         info!("Verifying AST...")
+    }
+    let mut vars = HashMap::from([("x".to_string(), Type::Num), ("y".to_string(), Type::Num)]);
+    for expr in &mut parsed {
+        infer_types(
+            expr,
+            &mut vars,
+        );
+        debug!("{expr}");
     }
     for expr in &parsed {
         if verify(expr, &mut HashSet::new(), &input) {

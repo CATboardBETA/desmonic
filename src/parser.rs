@@ -3,6 +3,7 @@
 use crate::lexer::{ComparisonOp, Keyword, Token, Type};
 use chumsky::prelude::*;
 use log::{error, info};
+use std::fmt::{Debug, Display, Formatter};
 use std::ops::Deref;
 use std::process::exit;
 
@@ -21,7 +22,7 @@ pub struct Else {
     pub body: Spanned<Expr>,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(PartialEq)]
 pub enum Expr {
     // Datatypes
 
@@ -72,6 +73,99 @@ pub enum Expr {
     },
 }
 
+impl Debug for Expr {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Expr::Ident(x) => write!(f, "Ident({x})"),
+            Expr::Num(x) => write!(f, "Num({x})"),
+            Expr::List(x) => write!(
+                f,
+                "List([{}])",
+                x.iter()
+                    .map(|x| Spanned::to_string(x) + " ")
+                    .collect::<String>()
+            ),
+            Expr::Pt2(x, y) => write!(f, "Pt2({x}, {y})"),
+            Expr::Pt3(x, y, z) => write!(f, "Pt3({x}, {y}, {z})"),
+            Expr::Neg(x) => write!(f, "Neg({x})"),
+            Expr::Add(x, y) => write!(f, "Add({x}, {y})"),
+            Expr::Sub(x, y) => write!(f, "Sub({x}, {y})"),
+            Expr::Div(x, y) => write!(f, "Div({x}, {y})"),
+            Expr::Mul(x, y) => write!(f, "Mul({x}, {y})"),
+            Expr::Pow(x, y) => write!(f, "Pow({x}, {y})"),
+            Expr::If {
+                lh_cmp,
+                cmp,
+                rh_cmp,
+                cmp2,
+                rrh_cmp,
+                body,
+                elifs,
+                elsse,
+            } => {
+                let mut elifs_s = String::new();
+                for elif in elifs {
+                    let Elif {
+                        lh_cmp,
+                        cmp,
+                        rh_cmp,
+                        cmp2,
+                        rrh_cmp,
+                        body,
+                    } = elif;
+                    elifs_s.push_str(&format!(
+                        ",{lh_cmp}{cmp}{rh_cmp}{}{}:{body}",
+                        if let Some(cmp2) = cmp2 {
+                            cmp2.to_string()
+                        } else {
+                            "".to_string()
+                        },
+                        if let Some(rrh_cmp) = rrh_cmp {
+                            rrh_cmp.to_string()
+                        } else {
+                            "".to_string()
+                        },
+                    ));
+                }
+                write!(
+                    f,
+                    "If({lh_cmp}{cmp}{rh_cmp}{}{}:{body}{}{})",
+                    if let Some(cmp2) = cmp2 {
+                        cmp2.to_string()
+                    } else {
+                        "".to_string()
+                    },
+                    if let Some(rrh_cmp) = rrh_cmp {
+                        rrh_cmp.to_string()
+                    } else {
+                        "".to_string()
+                    },
+                    elifs_s,
+                    if let Some(elsse) = elsse {
+                        format!(",{}", elsse.body)
+                    } else {
+                        "".to_string()
+                    }
+                )
+            }
+            Expr::Call { name, params } => write!(
+                f,
+                "Call({name}({}))",
+                params
+                    .iter()
+                    .map(|x| Spanned::to_string(x) + ",")
+                    .collect::<String>()
+            ),
+            Expr::Ineq { lhs, cmp, rhs } => write!(f, "Ineq({lhs}{cmp}{rhs})"),
+            Expr::Def { name, args, body } => write!(
+                f,
+                "Def({name}({})={body}",
+                args.iter().map(|x| x.clone() + ",").collect::<String>()
+            ),
+        }
+    }
+}
+
 #[derive(Debug, PartialEq)]
 pub struct Spanned<T>(pub T, pub SimpleSpan<usize>, pub Type);
 
@@ -80,6 +174,12 @@ impl<T> Deref for Spanned<T> {
 
     fn deref(&self) -> &Self::Target {
         &self.0
+    }
+}
+
+impl<T: Debug> Display for Spanned<T> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "({:?} {:?})", self.2, self.0)
     }
 }
 
@@ -102,10 +202,9 @@ pub fn parse(input: Vec<Token>, v: bool) -> Vec<Spanned<Expr>> {
 
 fn parser<'src>()
 -> impl Parser<'src, &'src [Token], Vec<Spanned<Expr>>, extra::Full<Rich<'src, Token>, (), ()>> {
-    use Type as TT;
     use crate::lexer::Token as Tk;
+    use Type as TT;
     let expr = recursive(|p| {
-   
         let atom = {
             let parenthesized = p
                 .clone()
@@ -135,8 +234,8 @@ fn parser<'src>()
                 .delimited_by(just(Tk::LParen), just(Tk::RParen))
                 .map(|((x, y), z)| Expr::Pt3(bx(x), bx(y), bx(z)))
                 .map_with(|x, e| Spanned(x, e.span(), TT::Point3));
-            let num = select! {Tk::Num(n) => Expr::Num(n)}
-                .map_with(|x, e| Spanned(x, e.span(), TT::Num));
+            let num =
+                select! {Tk::Num(n) => Expr::Num(n)}.map_with(|x, e| Spanned(x, e.span(), TT::Num));
             let ident = select! {Tk::Ident(s) => Expr::Ident(s)}
                 .map_with(|x, e| Spanned(x, e.span(), TT::Infer));
             let call = select! {Tk::Ident(s) => s}
@@ -213,9 +312,9 @@ fn parser<'src>()
             .map_with(|x, e| Spanned(x, e.span(), TT::Infer))
             .boxed();
 
-        let unary = just(Tk::Minus)
-            .repeated()
-            .foldr_with(atom, |_op, rhs, e| Spanned(Expr::Neg(bx(rhs)), e.span(), TT::Infer));
+        let unary = just(Tk::Minus).repeated().foldr_with(atom, |_op, rhs, e| {
+            Spanned(Expr::Neg(bx(rhs)), e.span(), TT::Infer)
+        });
 
         let pow = unary.clone().foldl_with(
             just(Tk::Power).then(unary).repeated(),
@@ -288,7 +387,7 @@ fn parser<'src>()
                 expr.clone()
                     .delimited_by(just(Tk::LBrace), just(Tk::RBrace)),
             )
-            .then(select!{ Tk::Type(t) => t })
+            .then(select! { Tk::Type(t) => t })
             .map_with(|(((name, args), body), t), e| {
                 Spanned(
                     Expr::Def {
