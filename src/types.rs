@@ -17,7 +17,19 @@ pub fn infer_types(spanned: &mut Spanned<Expr>, vars: &mut HashMap<String, Type>
                 spanned.2 = Type::Ineq
             }
         }
-        Spanned(Expr::Def { .. }, _, _) => {}
+        Spanned(Expr::Def { args, body, .. }, _, t) => {
+            for arg in args.iter() {
+                vars.insert(arg.0.clone(), arg.1.clone());
+            }
+            let bod_type = calc_type(body, vars);
+            if *t != bod_type {
+                mismatch_body_type(spanned)
+            }
+            body.2 = bod_type;
+            for arg in args {
+                vars.remove(&arg.0);
+            }
+        }
         _ => {
             spanned.2 = calc_type(spanned, vars);
         }
@@ -346,6 +358,11 @@ fn mismatched_list_types(a: &Spanned<Expr>, b: &Spanned<Expr>, a_t: Type, b_t: T
 }
 
 fn var_not_found(x: &str) -> ! {
+    todo!();
+    // exit(1)
+}
+
+fn mismatch_body_type(fnn: &Spanned<Expr>) -> ! {
     todo!();
     // exit(1)
 }
