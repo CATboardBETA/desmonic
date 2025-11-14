@@ -68,7 +68,7 @@ pub enum Expr {
     },
     Def {
         name: String,
-        args: Vec<String>,
+        args: Vec<(String, Type)>,
         body: Box<Spanned<Expr>>,
     },
 }
@@ -160,7 +160,7 @@ impl Debug for Expr {
             Expr::Def { name, args, body } => write!(
                 f,
                 "Def({name}({})={body}",
-                args.iter().map(|x| x.clone() + ",").collect::<String>()
+                args.iter().map(|x| x.0.clone() + ",").collect::<String>()
             ),
         }
     }
@@ -378,17 +378,20 @@ fn parser<'src>()
             .then_ignore(just(Tk::LParen))
             .then(
                 select! { Tk::Ident(s) => s }
+                    .then_ignore(just(Tk::Colon))
+                    .then(select! { Tk::Type(t) => t })
                     .separated_by(just(Tk::Comma))
                     .allow_trailing()
                     .collect::<Vec<_>>(),
             )
             .then_ignore(just(Tk::RParen))
+            .then_ignore(just(Tk::Arrow))
+            .then(select! { Tk::Type(t) => t })
             .then(
                 expr.clone()
                     .delimited_by(just(Tk::LBrace), just(Tk::RBrace)),
             )
-            .then(select! { Tk::Type(t) => t })
-            .map_with(|(((name, args), body), t), e| {
+            .map_with(|(((name, args), t), body), e| {
                 Spanned(
                     Expr::Def {
                         name,

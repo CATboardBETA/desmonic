@@ -118,10 +118,7 @@ fn compile(input: String, output: Option<String>, v: bool) {
     }
     let mut vars = HashMap::from([("x".to_string(), Type::Num), ("y".to_string(), Type::Num)]);
     for expr in &mut parsed {
-        infer_types(
-            expr,
-            &mut vars,
-        );
+        infer_types(expr, &mut vars);
         debug!("{expr}");
     }
     for expr in &parsed {

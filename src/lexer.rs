@@ -136,6 +136,8 @@ pub enum Token {
     Colon,
     #[token(",")]
     Comma,
+    #[token("->")]
+    Arrow,
     #[token("+")]
     Plus,
     #[token("-")]

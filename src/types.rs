@@ -1,6 +1,5 @@
 use crate::lexer::{ComparisonOp, Type};
 use crate::parser::{Expr, Spanned};
-use chumsky::span::SimpleSpan;
 use std::collections::HashMap;
 
 pub fn infer_types(spanned: &mut Spanned<Expr>, vars: &mut HashMap<String, Type>) {
@@ -40,9 +39,9 @@ fn calc_type(
                 if old.clone().is_some_and(|x| x == new) || old.is_none() {
                     old = Some(new);
                     old_i = Some(i)
-                } else  {
+                } else {
                     #[allow(clippy::unnecessary_unwrap)]
-                    mismatched_list_types(i,old_i.unwrap(),new,old.unwrap())
+                    mismatched_list_types(i, old_i.unwrap(), new, old.unwrap())
                 }
             }
             Type::List(Box::new(old.unwrap_or(Type::Num)))

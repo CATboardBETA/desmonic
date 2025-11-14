@@ -13,7 +13,7 @@ pub fn eval(Spanned(e, _, _): Spanned<Expr>) -> String {
         }
         Expr::Num(n) => n,
         Expr::List(l) => {
-            let full=l.into_iter().map(eval).collect::<Vec<String>>().join(",");
+            let full = l.into_iter().map(eval).collect::<Vec<String>>().join(",");
             format!("\\left[{full}\\right]")
         }
         Expr::Pt2(x, y) => format!("\\left({},{}\\right)", eval(*x), eval(*y)),
@@ -93,7 +93,7 @@ pub fn eval(Spanned(e, _, _): Spanned<Expr>) -> String {
             } else {
                 format!("{start}_{{{rest}}}")
             };
-            format!("{}\\left({}\\right)={}", name, args.join(" "), eval(*body))
+            format!("{}\\left({}\\right)={}", name, args.into_iter().map(|x|x.0).collect::<Vec<_>>().join(" "), eval(*body))
         }
         Expr::Call { mut name, params } => {
             let (start, rest) = name.split_at(1);
