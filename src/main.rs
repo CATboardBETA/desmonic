@@ -7,7 +7,7 @@ use crate::types::infer_types;
 use crate::verify::verify;
 use clap::builder::styling;
 use clap::{Parser, Subcommand};
-use log::{LevelFilter, debug, info, trace};
+use log::{LevelFilter, info, trace};
 use std::collections::{HashMap, HashSet};
 use std::process::exit;
 

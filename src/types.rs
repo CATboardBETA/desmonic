@@ -125,49 +125,31 @@ fn pow(
         (_, Type::Ineq) => {
             unreachable!("[internal] Ineq type shouldn't be possible in pow")
         }
-        (Type::List(a), Type::Point3)
-            if *a == Type::Point3 || *a == Type::Num =>
-        {
-            x_t
-        }
+        (Type::List(a), Type::Point3) if *a == Type::Point3 || *a == Type::Num => x_t,
         (Type::List(_), Type::Point) => mismatched_list_types(x, y, x_t, y_t),
         (Type::Num, Type::Point3) => Type::Point3,
         (Type::Num, Type::Point) => Type::Point,
         (Type::Num, Type::List(a))
-            if *a == Type::Num
-                || *a == Type::Point
-                || *a == Type::Point3 =>
+            if *a == Type::Num || *a == Type::Point || *a == Type::Point3 =>
         {
             y_t
         }
         (Type::Num, Type::List(_)) => mismatched_list_types(x, y, x_t, y_t),
         (Type::Point3, Type::Num) => Type::Point3,
         (Type::Point3, Type::Point) => mismatched_types(x, y, x_t, y_t, Type::Point3),
-        (Type::Point3, Type::List(a))
-            if *a == Type::Point3 || *a == Type::Num =>
-        {
-            y_t
-        }
+        (Type::Point3, Type::List(a)) if *a == Type::Point3 || *a == Type::Num => y_t,
         (Type::Point3, Type::List(_)) => mismatched_list_types(x, y, x_t, y_t),
         (Type::Point, Type::Num) => Type::Point,
         (Type::Point, Type::Point3) => mismatched_types(x, y, x_t, y_t, Type::Point),
-        (Type::Point, Type::List(a)) if *a == Type::Point || *a == Type::Num => {
-            y_t
-        }
+        (Type::Point, Type::List(a)) if *a == Type::Point || *a == Type::Num => y_t,
         (Type::Point, Type::List(_)) => mismatched_list_types(x, y, x_t, y_t),
         (Type::List(a), Type::Num)
-            if *a == Type::Num
-                || *a == Type::Point
-                || *a == Type::Point3 =>
+            if *a == Type::Num || *a == Type::Point || *a == Type::Point3 =>
         {
             x_t
         }
         (Type::List(_), Type::Num) => mismatched_list_types(x, y, x_t, y_t),
-        (Type::List(a), Type::Point3)
-            if *a == Type::Point3 || *a == Type::Num =>
-        {
-            x_t
-        }
+        (Type::List(a), Type::Point3) if *a == Type::Point3 || *a == Type::Num => x_t,
         (Type::List(_), Type::Point3) => mismatched_list_types(x, y, x_t, y_t),
         (Type::List(a), Type::List(b)) => match (*a, *b) {
             (Type::List(_), _) => unreachable!(),
@@ -216,49 +198,31 @@ fn div_mul(
         (_, Type::Ineq) => {
             unreachable!("[internal] Ineq type shouldn't be possible in mul/div")
         }
-        (Type::List(a), Type::Point3)
-            if *a == Type::Point3 || *a == Type::Num =>
-        {
-            x_t
-        }
+        (Type::List(a), Type::Point3) if *a == Type::Point3 || *a == Type::Num => x_t,
         (Type::List(_), Type::Point) => mismatched_list_types(x, y, x_t, y_t),
         (Type::Num, Type::Point3) => Type::Point3,
         (Type::Num, Type::Point) => Type::Point,
         (Type::Num, Type::List(a))
-            if *a == Type::Num
-                || *a == Type::Point
-                || *a == Type::Point3 =>
+            if *a == Type::Num || *a == Type::Point || *a == Type::Point3 =>
         {
             y_t
         }
         (Type::Num, Type::List(_)) => mismatched_list_types(x, y, x_t, y_t),
         (Type::Point3, Type::Num) => Type::Point3,
         (Type::Point3, Type::Point) => mismatched_types(x, y, x_t, y_t, Type::Point3),
-        (Type::Point3, Type::List(a))
-            if *a == Type::Point3 || *a == Type::Num =>
-        {
-            y_t
-        }
+        (Type::Point3, Type::List(a)) if *a == Type::Point3 || *a == Type::Num => y_t,
         (Type::Point3, Type::List(_)) => mismatched_list_types(x, y, x_t, y_t),
         (Type::Point, Type::Num) => Type::Point,
         (Type::Point, Type::Point3) => mismatched_types(x, y, x_t, y_t, Type::Point),
-        (Type::Point, Type::List(a)) if *a == Type::Point || *a == Type::Num => {
-            y_t
-        }
+        (Type::Point, Type::List(a)) if *a == Type::Point || *a == Type::Num => y_t,
         (Type::Point, Type::List(_)) => mismatched_list_types(x, y, x_t, y_t),
         (Type::List(a), Type::Num)
-            if *a == Type::Num
-                || *a == Type::Point
-                || *a == Type::Point3 =>
+            if *a == Type::Num || *a == Type::Point || *a == Type::Point3 =>
         {
             x_t
         }
         (Type::List(_), Type::Num) => mismatched_list_types(x, y, x_t, y_t),
-        (Type::List(a), Type::Point3)
-            if *a == Type::Point3 || *a == Type::Num =>
-        {
-            x_t
-        }
+        (Type::List(a), Type::Point3) if *a == Type::Point3 || *a == Type::Num => x_t,
         (Type::List(_), Type::Point3) => mismatched_list_types(x, y, x_t, y_t),
         (Type::List(a), Type::List(b)) => match (*a, *b) {
             (Type::List(_), _) => unreachable!(),
