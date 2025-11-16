@@ -1,5 +1,5 @@
 use log::{error, info};
-use logos::Logos;
+use logos::{Lexer, Logos};
 use std::fmt::{Display, Formatter};
 use std::fs;
 use std::path::Path;
@@ -56,6 +56,7 @@ pub enum Keyword {
     If,
     Elif,
     Else,
+    Fold,
 }
 
 impl FromStr for Keyword {
@@ -68,7 +69,7 @@ impl FromStr for Keyword {
             "if" => Ok(If),
             "elif" => Ok(Elif),
             "else" => Ok(Else),
-
+            "fold" => Ok(Fold),
             _ => unreachable!("infallible, due to logos"),
         }
     }
@@ -118,7 +119,7 @@ impl FromStr for Type {
 pub enum Token {
     #[regex(r"#(?:Action|Num|Point3|Point|List<(?:Action|Num|Point|Point3)>)", |lex| lex.slice().parse::<Type>().unwrap())]
     Type(Type),
-    #[regex(r"fn|if|elif|else", |lex| lex.slice().parse::<Keyword>().unwrap(), priority = 10000)]
+    #[regex(r"fn|if|elif|else|fold", |lex| lex.slice().parse::<Keyword>().unwrap(), priority = 10000)]
     Keyword(Keyword),
     #[token("(")]
     LParen,
@@ -154,6 +155,17 @@ pub enum Token {
     Comparison(ComparisonOp),
     #[regex(r"-?(?:\d+(?:\.\d*)?|\.\d+)", |lex| lex.slice().to_owned())]
     Num(String),
+    #[regex(r#""(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'"#, create_string)]
+    String(String),
+}
+
+fn create_string(s: &mut Lexer<Token>) -> String {
+    let mut s = s.slice().to_string();
+    // replace escape sequences
+    s = s.replace("\\\"", "\"");
+    s = s.replace("\\\'", "'");
+    s = s.replace("\\n", "\n");
+    s.replace("\\t", "\t")
 }
 
 pub fn lex<T: AsRef<Path>>(input: T, v: bool) -> Vec<Token> {

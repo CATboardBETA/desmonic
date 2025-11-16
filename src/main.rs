@@ -161,9 +161,10 @@ fn compile(input: String, output: Option<String>, v: bool) {
     }
     let mut evalled = vec![];
     for expr in parsed {
-        let x = evalall(expr);
+        let x = evalall(expr, None);
         evalled.push(x.clone());
     }
+    let evalled = evalled.into_iter().flatten().collect::<Vec<_>>();
     let gstate = evalled.into_graph_state();
     let output_file = output.unwrap_or_else(|| format!("{}.json", input.trim_end_matches(".desm")));
     std::fs::write(output_file, gstate).unwrap();

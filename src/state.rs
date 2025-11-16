@@ -12,13 +12,21 @@ impl ToGraphStateJson for Vec<(String, Ids)> {
     fn into_graph_state(self) -> String {
         let mut expressions = vec![];
         for (latex, id) in self.into_iter() {
-            expressions.push(Expression::Expression {
-                id: id.id.to_string(),
-                latex: Some(latex),
-                color: None,
-                folder_id: id.folder_id.map(|x| x.to_string()),
-                other: Default::default(),
-            })
+            if latex.starts_with("\\fold ") {
+                expressions.push(Expression::Folder {
+                    id: id.id.to_string(),
+                    title: latex.strip_prefix("\\fold ").map(ToString::to_string),
+                    other: Default::default(),
+                });
+            } else {
+                expressions.push(Expression::Expression {
+                    id: id.id.to_string(),
+                    latex: Some(latex),
+                    color: None,
+                    folder_id: id.folder_id.map(|x| x.to_string()),
+                    other: Default::default(),
+                })
+            }
         }
         serde_json::to_string(&GraphState {
             version: 11,

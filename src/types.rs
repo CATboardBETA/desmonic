@@ -42,6 +42,11 @@ pub fn infer_types(
                 ),
             );
         }
+        Spanned(Expr::Fold { body, .. }, _, _) => {
+            for item in body.iter_mut() {
+                calc_type(item, vars, funcs);
+            }
+        }
         _ => {
             spanned.2 = calc_type(spanned, vars, funcs);
         }
@@ -178,6 +183,7 @@ fn calc_type(
         }
         Expr::Ineq { .. } => unreachable!(),
         Expr::Def { .. } => unreachable!(),
+        Expr::Fold { .. } => unreachable!(),
     };
     *type_ = ty.clone();
     ty

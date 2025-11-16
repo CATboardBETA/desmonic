@@ -71,6 +71,10 @@ pub enum Expr {
         args: Vec<(String, Type)>,
         body: Box<Spanned<Expr>>,
     },
+    Fold {
+        name: String,
+        body: Vec<Spanned<Expr>>,
+    },
 }
 
 impl Debug for Expr {
@@ -162,6 +166,9 @@ impl Debug for Expr {
                 "Def({name}({})={body}",
                 args.iter().map(|x| x.0.clone() + ",").collect::<String>()
             ),
+            Expr::Fold { name, body } => {
+                write!(f, "FOLD({name}:  {body:?})",)
+            }
         }
     }
 }
@@ -356,53 +363,66 @@ fn parser<'src>()
         out.or(iff)
     })
     .boxed();
-    let stmt = choice((
-        expr.clone()
-            .then(select! {
-                Tk::Comparison(c) => c
-            })
-            .then(expr.clone())
-            .map_with(|((lhs, cmp), rhs), e| {
-                Spanned(
-                    Expr::Ineq {
-                        lhs: bx(lhs),
-                        cmp,
-                        rhs: bx(rhs),
-                    },
-                    e.span(),
-                    TT::Infer,
+    let stmt = recursive(|stx| {
+        choice((
+            expr.clone()
+                .then(select! {
+                    Tk::Comparison(c) => c
+                })
+                .then(expr.clone())
+                .map_with(|((lhs, cmp), rhs), e| {
+                    Spanned(
+                        Expr::Ineq {
+                            lhs: bx(lhs),
+                            cmp,
+                            rhs: bx(rhs),
+                        },
+                        e.span(),
+                        TT::Infer,
+                    )
+                }),
+            just(Tk::Keyword(Keyword::Fn))
+                .ignore_then(select! { Tk::Ident(s) => s })
+                .then_ignore(just(Tk::LParen))
+                .then(
+                    select! { Tk::Ident(s) => s }
+                        .then_ignore(just(Tk::Colon))
+                        .then(select! { Tk::Type(t) => t })
+                        .separated_by(just(Tk::Comma))
+                        .allow_trailing()
+                        .collect::<Vec<_>>(),
                 )
-            }),
-        just(Tk::Keyword(Keyword::Fn))
-            .ignore_then(select! { Tk::Ident(s) => s })
-            .then_ignore(just(Tk::LParen))
-            .then(
-                select! { Tk::Ident(s) => s }
-                    .then_ignore(just(Tk::Colon))
-                    .then(select! { Tk::Type(t) => t })
-                    .separated_by(just(Tk::Comma))
-                    .allow_trailing()
-                    .collect::<Vec<_>>(),
-            )
-            .then_ignore(just(Tk::RParen))
-            .then_ignore(just(Tk::Arrow))
-            .then(select! { Tk::Type(t) => t })
-            .then(
-                expr.clone()
-                    .delimited_by(just(Tk::LBrace), just(Tk::RBrace)),
-            )
-            .map_with(|(((name, args), t), body), e| {
-                Spanned(
-                    Expr::Def {
-                        name,
-                        args,
-                        body: bx(body),
-                    },
-                    e.span(),
-                    t,
+                .then_ignore(just(Tk::RParen))
+                .then_ignore(just(Tk::Arrow))
+                .then(select! { Tk::Type(t) => t })
+                .then(
+                    expr.clone()
+                        .delimited_by(just(Tk::LBrace), just(Tk::RBrace)),
                 )
-            }),
-    ));
+                .map_with(|(((name, args), t), body), e| {
+                    Spanned(
+                        Expr::Def {
+                            name,
+                            args,
+                            body: bx(body),
+                        },
+                        e.span(),
+                        t,
+                    )
+                }),
+            just(Tk::Keyword(Keyword::Fold))
+                .ignore_then(select! { Tk::String(s) => s })
+                .then(
+                    stx.or(expr.clone())
+                        .repeated()
+                        .collect::<Vec<_>>()
+                        .delimited_by(just(Tk::LBrace), just(Tk::RBrace)),
+                )
+                .map_with(|(name, body), e| {
+                    Spanned(Expr::Fold { name, body }, e.span(), TT::Infer)
+                }),
+        ))
+    });
     stmt.or(expr).repeated().collect::<Vec<_>>()
 }
 
