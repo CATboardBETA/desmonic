@@ -33,12 +33,12 @@
     urlInput.value = "http://localhost:8000";
     container.appendChild(urlInput);
 
-    const getVersion = async () => await (await fetch(urlInput.value + "/version")).text();
     const recompile = async () => {
-        recompileInput.innerText = "Fetching...";
-        Calc.setState(await (await fetch(urlInput.value)).json());
-        lastLoadedVersion = await getVersion();
-        recompileInput.innerText = "Recompile";
+        try {
+            recompileInput.innerText = "Fetching...";
+            Calc.setState(await (await fetch(urlInput.value)).json());
+            recompileInput.innerText = "Recompile";
+        } catch {}
     }
 
     const recompileInput = document.createElement("button");
@@ -60,8 +60,6 @@
     const recompileIfOutOfDate = async () => {
         if (autoRecompileInput.checked) {
            checkVersion: {
-                let version = await getVersion();
-                if (version === lastLoadedVersion) break checkVersion;
                 await recompile();
             }
         }

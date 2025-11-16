@@ -8,8 +8,12 @@ use crate::types::infer_types;
 use clap::builder::styling;
 use clap::{Parser, Subcommand};
 use log::{LevelFilter, debug, info, trace};
+use rocket::response::{Builder, Responder};
+use rocket::{Config, Request, Response, get, routes};
 use std::collections::HashMap;
-use std::path::Path;
+use std::fs::read_to_string;
+use std::ops::Deref;
+use std::sync::Mutex;
 
 mod eval;
 mod lexer;
@@ -49,7 +53,7 @@ enum Commands {
         /// The file to open
         input: String,
         /// The port to open the webserver to
-        #[arg(short, long, default_value_t = 4444)]
+        #[arg(short, long, default_value_t = 8000)]
         port: u16,
         /// Display debug info
         #[arg(short, long)]
@@ -63,7 +67,7 @@ enum Commands {
         /// The file to output json to. Defaults to <input>.json
         output: Option<String>,
         /// The port to open the webserver to
-        #[arg(short, long, default_value_t = 4444)]
+        #[arg(short, long, default_value_t = 8000)]
         port: u16,
         /// Display debug info
         #[arg(short, long)]
@@ -71,7 +75,8 @@ enum Commands {
     },
 }
 
-fn main() {
+#[rocket::main]
+async fn main() {
     let args = Args::parse();
 
     colog::default_builder()
@@ -88,22 +93,54 @@ fn main() {
             input,
             port,
             verbose,
-        } => open(input, port, verbose),
+        } => open(input, port, verbose).await,
         Commands::Run {
             input,
             output,
             port,
             verbose,
-        } => run(input, output, port, verbose),
+        } => run(input, output, port, verbose).await,
     }
 }
 
-fn run(_input: String, _output: Option<String>, _port: u16, _v: bool) {
-    todo!()
+async fn run(input: String, output: Option<String>, port: u16, v: bool) {
+    compile(input.clone(), output.clone(), v);
+    open(
+        output.unwrap_or_else(|| format!("{}.json", input.trim_end_matches(".desm"))),
+        port,
+        v,
+    )
+    .await
 }
 
-fn open(_input: String, _port: u16, _v: bool) {
-    todo!()
+async fn open(input: String, port: u16, _v: bool) {
+    *DATA_OUT.lock().unwrap() = read_to_string(&input).unwrap();
+    let _rocket = rocket::build()
+        .configure(
+            Config::figment()
+                .merge(("port", port))
+                .merge(("log_level", "off")),
+        )
+        .mount("/", routes![data])
+        .launch()
+        .await;
+}
+
+static DATA_OUT: Mutex<String> = Mutex::new(String::new());
+
+struct GraphStateResponse<R>(pub R);
+
+impl<'r, 'o: 'r, R: Responder<'r, 'o>> Responder<'r, 'o> for GraphStateResponse<R> {
+    fn respond_to(self, req: &'r Request<'_>) -> rocket::response::Result<'o> {
+        Response::build_from(self.0.respond_to(req)?)
+            .raw_header("Access-Control-Allow-Origin", "*")
+            .ok()
+    }
+}
+
+#[get("/")]
+fn data() -> GraphStateResponse<String> {
+    GraphStateResponse(DATA_OUT.lock().unwrap().clone())
 }
 
 fn compile(input: String, output: Option<String>, v: bool) {
@@ -128,7 +165,6 @@ fn compile(input: String, output: Option<String>, v: bool) {
         evalled.push(x.clone());
     }
     let gstate = evalled.into_graph_state();
-    let output_file =
-        output.unwrap_or_else(|| format!("{}.json", input.trim_end_matches(".desm")));
+    let output_file = output.unwrap_or_else(|| format!("{}.json", input.trim_end_matches(".desm")));
     std::fs::write(output_file, gstate).unwrap();
 }

@@ -1,0 +1,9 @@
+[jobs.webserver]
+command = ["cargo", "run", "--", "r", "test.desm"]
+need_stdout = true
+allow_warnings = true
+background = true
+on_change_strategy = "kill_then_restart"
+default_watch = false
+apply_gitignore = false
+watch = ["/Users/will/desmonic/test.desm"]
