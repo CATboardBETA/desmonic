@@ -7,7 +7,7 @@ use std::fmt::{Debug, Display, Formatter};
 use std::ops::Deref;
 use std::process::exit;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Elif {
     pub lh_cmp: Spanned<Expr>,
     pub cmp: ComparisonOp,
@@ -17,12 +17,12 @@ pub struct Elif {
     pub body: Spanned<Expr>,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Else {
     pub body: Spanned<Expr>,
 }
 
-#[derive(PartialEq)]
+#[derive(Clone, PartialEq)]
 pub enum Expr {
     // Datatypes
 
@@ -166,7 +166,7 @@ impl Debug for Expr {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Spanned<T>(pub T, pub SimpleSpan<usize>, pub Type);
 
 impl<T> Deref for Spanned<T> {

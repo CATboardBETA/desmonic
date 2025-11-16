@@ -7,7 +7,7 @@ use crate::types::infer_types;
 use crate::verify::verify;
 use clap::builder::styling;
 use clap::{Parser, Subcommand};
-use log::{LevelFilter, info, trace};
+use log::{LevelFilter, debug, info, trace};
 use std::collections::{HashMap, HashSet};
 use std::process::exit;
 
@@ -117,8 +117,10 @@ fn compile(input: String, output: Option<String>, v: bool) {
         info!("Verifying AST...")
     }
     let mut vars = HashMap::from([("x".to_string(), Type::Num), ("y".to_string(), Type::Num)]);
+    let mut funcs = HashMap::from([]);
     for expr in &mut parsed {
-        infer_types(expr, &mut vars);
+        infer_types(expr, &mut vars, &mut funcs);
+        debug!("Types: {expr}");
     }
     for expr in &parsed {
         if verify(expr, &mut HashSet::new(), &input) {

@@ -1,13 +1,17 @@
 use crate::lexer::{ComparisonOp, Type};
-use crate::parser::{Expr, Spanned};
+use crate::parser::{Elif, Expr, Spanned};
 use std::collections::HashMap;
 
-pub fn infer_types(spanned: &mut Spanned<Expr>, vars: &mut HashMap<String, Type>) {
+pub fn infer_types(
+    spanned: &mut Spanned<Expr>,
+    vars: &mut HashMap<String, Type>,
+    funcs: &mut HashMap<String, (Vec<Type>, Type)>,
+) {
     match spanned {
         Spanned(Expr::Ineq { lhs, cmp, rhs }, _, _) => {
             if *cmp == ComparisonOp::IneqEq {
                 if let Expr::Ident(x) = &lhs.0 {
-                    let rh_type = calc_type(rhs, vars);
+                    let rh_type = calc_type(rhs, vars, funcs);
                     rhs.2 = rh_type.clone();
                     lhs.2 = rh_type.clone();
                     spanned.2 = rh_type.clone();
@@ -17,37 +21,47 @@ pub fn infer_types(spanned: &mut Spanned<Expr>, vars: &mut HashMap<String, Type>
                 spanned.2 = Type::Ineq
             }
         }
-        Spanned(Expr::Def { args, body, .. }, _, t) => {
+        Spanned(Expr::Def { args, body, name }, _, t) => {
             for arg in args.iter() {
                 vars.insert(arg.0.clone(), arg.1.clone());
             }
-            let bod_type = calc_type(body, vars);
+            let bod_type = calc_type(body, vars, funcs);
             if *t != bod_type {
                 mismatch_body_type(spanned)
             }
-            body.2 = bod_type;
-            for arg in args {
+            body.2 = bod_type.clone();
+            for arg in args.iter() {
                 vars.remove(&arg.0);
             }
+            funcs.insert(
+                name.clone(),
+                (
+                    args.iter().map(|x| x.1.clone()).collect::<Vec<Type>>(),
+                    bod_type,
+                ),
+            );
         }
         _ => {
-            spanned.2 = calc_type(spanned, vars);
+            spanned.2 = calc_type(spanned, vars, funcs);
         }
     }
 }
 
 fn calc_type(
-    Spanned(expr, _span, _type_): &mut Spanned<Expr>,
+    Spanned(expr, _span, type_): &mut Spanned<Expr>,
     vars: &mut HashMap<String, Type>,
-) -> Type {
-    match expr {
-        Expr::Ident(x) => vars.get(x).cloned().unwrap_or_else(|| var_not_found(x)),
+    funcs: &mut HashMap<String, (Vec<Type>, Type)>,
+) -> Type { 
+    let ty = match expr {
+        Expr::Ident(x) => {
+            vars.get(x).cloned().unwrap_or_else(|| var_not_found(x))
+        }
         Expr::Num(_) => Type::Num,
         Expr::List(x) => {
             let mut old = None;
             let mut old_i = None;
             for i in x {
-                let new = calc_type(i, vars);
+                let new = calc_type(i, vars, funcs);
                 if old.clone().is_some_and(|x| x == new) || old.is_none() {
                     old = Some(new);
                     old_i = Some(i)
@@ -59,9 +73,9 @@ fn calc_type(
             Type::List(Box::new(old.unwrap_or(Type::Num)))
         }
         Expr::Pt2(x, y) => {
-            let x_t = calc_type(x, vars);
+            let x_t = calc_type(x, vars, funcs);
             x.2 = x_t.clone();
-            let y_t = calc_type(y, vars);
+            let y_t = calc_type(y, vars, funcs);
             y.2 = y_t.clone();
             if matches!(x_t, Type::List(_)) || matches!(y_t, Type::List(_)) {
                 Type::List(Box::new(Type::Point))
@@ -70,48 +84,105 @@ fn calc_type(
             }
         }
         Expr::Pt3(x, y, z) => {
-            let x_t = calc_type(x, vars);
+            let x_t = calc_type(x, vars, funcs);
             x.2 = x_t.clone();
-            let y_t = calc_type(y, vars);
+            let y_t = calc_type(y, vars, funcs);
             y.2 = y_t.clone();
-            let z_t = calc_type(y, vars);
+            let z_t = calc_type(y, vars, funcs);
             z.2 = z_t.clone();
             if matches!(x_t, Type::List(_))
                 || matches!(y_t, Type::List(_))
                 || matches!(z_t, Type::List(_))
             {
-                Type::List(Box::new(Type::Point))
+                Type::List(Box::new(Type::Point3))
             } else {
-                Type::Point
+                Type::Point3
             }
         }
         Expr::Neg(x) => {
-            let ty = calc_type(x, vars);
+            let ty = calc_type(x, vars, funcs);
             x.2 = ty.clone();
             ty
         }
-        Expr::Add(x, y) => add_sub(x, y, vars),
-        Expr::Sub(x, y) => add_sub(x, y, vars),
-        Expr::Div(x, y) => div_mul(x, y, vars),
-        Expr::Mul(x, y) => div_mul(x, y, vars),
-        Expr::Pow(x, y) => pow(x, y, vars),
-        Expr::If { .. } => todo!(),
+        Expr::Add(x, y) => add_sub(x, y, vars, funcs),
+        Expr::Sub(x, y) => add_sub(x, y, vars, funcs),
+        Expr::Div(x, y) => div_mul(x, y, vars, funcs),
+        Expr::Mul(x, y) => div_mul(x, y, vars, funcs),
+        Expr::Pow(x, y) => pow(x, y, vars, funcs),
+        Expr::If {
+            lh_cmp,
+            rh_cmp,
+            rrh_cmp,
+            body,
+            elifs,
+            elsse,
+            ..
+        } => {
+            let lh_ty = calc_type(lh_cmp, vars, funcs);
+            let rh_ty = calc_type(rh_cmp, vars, funcs);
+            if let Some(rrh_cmp) = rrh_cmp {
+                let rrh_ty = calc_type(rrh_cmp, vars, funcs);
+                if lh_ty != rh_ty {
+                    mismatched_types(lh_cmp, rrh_cmp, lh_ty.clone(), rrh_ty, rh_ty)
+                }
+            };
+            if lh_ty != rh_ty {
+                mismatched_types(lh_cmp, rh_cmp, lh_ty.clone(), rh_ty, lh_ty)
+            }
+            let bod_ty = calc_type(body, vars, funcs);
+            for Elif {
+                lh_cmp,
+                rh_cmp,
+                rrh_cmp,
+                body: ebody,
+                ..
+            } in elifs.iter_mut()
+            {
+                let elif_ty = calc_type(ebody, vars, funcs);
+                if elif_ty != bod_ty {
+                    mismatched_types(body, ebody, bod_ty.clone(), elif_ty, bod_ty)
+                }
+
+                let lh_ty = calc_type(lh_cmp, vars, funcs);
+                let rh_ty = calc_type(rh_cmp, vars, funcs);
+                if let Some(rrh_cmp) = rrh_cmp {
+                    let rrh_ty = calc_type(rrh_cmp, vars, funcs);
+                    if lh_ty != rh_ty {
+                        mismatched_types(lh_cmp, rrh_cmp, lh_ty.clone(), rrh_ty, rh_ty)
+                    }
+                };
+                if lh_ty != rh_ty {
+                    mismatched_types(lh_cmp, rh_cmp, lh_ty.clone(), rh_ty, lh_ty)
+                }
+            }
+            if let Some(elsse2) = elsse.as_mut() {
+                let elsse_ty = calc_type(&mut elsse2.body, vars, funcs);
+                if elsse_ty.clone() != bod_ty {
+                    mismatched_types(body, &elsse2.body, bod_ty.clone(), elsse_ty, bod_ty)
+                }
+                elsse.as_mut().unwrap().body.2 = elsse_ty;
+            }
+            bod_ty
+        }
         Expr::Call { .. } => todo!(),
-        Expr::Ineq { .. } => todo!(),
-        Expr::Def { .. } => todo!(),
-    }
+        Expr::Ineq { .. } => unreachable!(),
+        Expr::Def { .. } => unreachable!(),
+    };
+    *type_ = ty.clone();
+    ty
 }
 
 fn pow(
-    x: &mut Box<Spanned<Expr>>,
-    y: &mut Box<Spanned<Expr>>,
+    x: &mut Spanned<Expr>,
+    y: &mut Spanned<Expr>,
     vars: &mut HashMap<String, Type>,
+    funcs: &mut HashMap<String, (Vec<Type>, Type)>,
 ) -> Type {
-    let x_t = calc_type(x, vars);
+    let x_t = calc_type(x, vars, funcs);
     x.2 = x_t.clone();
-    let y_t = calc_type(y, vars);
+    let y_t = calc_type(y, vars, funcs);
     y.2 = y_t.clone();
-    match (x_t.clone(), y_t.clone()) {
+    match (x_t.clone(), y_t.clone()){
         (Type::Action, _) => op_action(x, y),
         (_, Type::Action) => op_action(x, y),
         (Type::Num, Type::Num) => Type::Num,
@@ -179,10 +250,11 @@ fn div_mul(
     x: &mut Box<Spanned<Expr>>,
     y: &mut Box<Spanned<Expr>>,
     vars: &mut HashMap<String, Type>,
+    funcs: &mut HashMap<String, (Vec<Type>, Type)>,
 ) -> Type {
-    let x_t = calc_type(x, vars);
+    let x_t = calc_type(x, vars, funcs);
     x.2 = x_t.clone();
-    let y_t = calc_type(y, vars);
+    let y_t = calc_type(y, vars, funcs);
     y.2 = y_t.clone();
     match (x_t.clone(), y_t.clone()) {
         (Type::Action, _) => op_action(x, y),
@@ -252,10 +324,11 @@ fn add_sub(
     x: &mut Box<Spanned<Expr>>,
     y: &mut Box<Spanned<Expr>>,
     vars: &mut HashMap<String, Type>,
+    funcs: &mut HashMap<String, (Vec<Type>, Type)>,
 ) -> Type {
-    let x_t = calc_type(x, vars);
+    let x_t = calc_type(x, vars, funcs);
     x.2 = x_t.clone();
-    let y_t = calc_type(y, vars);
+    let y_t = calc_type(y, vars, funcs);
     y.2 = y_t.clone();
     match (x_t.clone(), y_t.clone()) {
         (Type::List(a), Type::List(b)) => {
