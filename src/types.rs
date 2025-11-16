@@ -1,6 +1,7 @@
 use crate::lexer::{ComparisonOp, Type};
 use crate::parser::{Elif, Expr, Spanned};
 use std::collections::HashMap;
+use std::ops::Deref;
 
 pub fn infer_types(
     spanned: &mut Spanned<Expr>,
@@ -164,12 +165,29 @@ fn calc_type(
             }
             bod_ty
         }
-        Expr::Call { .. } => todo!(),
+        Expr::Call { name, params } => {
+            let func = funcs.get(name).unwrap_or_else(|| func_not_found(name.deref())).clone();
+            for (p_found, ty_e) in params.iter_mut().zip(func.0.iter()) {
+                let ty_f = calc_type(p_found, vars, funcs);
+                if ty_f != ty_e.clone() {
+                    wrong_func_type(&func, p_found.deref(), &ty_f, ty_e)
+                }
+            }
+            func.1.clone()
+        },
         Expr::Ineq { .. } => unreachable!(),
         Expr::Def { .. } => unreachable!(),
     };
     *type_ = ty.clone();
     ty
+}
+
+fn wrong_func_type(func: &(Vec<Type>, Type), found: &Spanned<Expr>, type_found: &Type, type_expected: &Type) -> ! {
+    todo!()
+}
+
+fn func_not_found(name: &str) -> !{
+    todo!()
 }
 
 fn pow(

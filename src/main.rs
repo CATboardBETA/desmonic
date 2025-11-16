@@ -4,7 +4,6 @@ use crate::eval::eval;
 use crate::lexer::{Type, lex};
 use crate::parser::parse;
 use crate::types::infer_types;
-use crate::verify::verify;
 use clap::builder::styling;
 use clap::{Parser, Subcommand};
 use log::{LevelFilter, debug, info, trace};
