@@ -15,7 +15,6 @@ mod eval;
 mod lexer;
 mod parser;
 mod types;
-mod verify;
 
 const STYLES: styling::Styles = styling::Styles::styled()
     .header(styling::AnsiColor::Green.on_default().bold())
@@ -121,11 +120,6 @@ fn compile(input: String, output: Option<String>, v: bool) {
     for expr in &mut parsed {
         infer_types(expr, &mut vars, &mut funcs);
         debug!("Types: {expr}");
-    }
-    for expr in &parsed {
-        if verify(expr, &mut HashSet::new(), &input) {
-            exit(1)
-        };
     }
     for expr in parsed {
         println!("expression: {}", eval(expr));

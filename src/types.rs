@@ -51,7 +51,7 @@ fn calc_type(
     Spanned(expr, _span, type_): &mut Spanned<Expr>,
     vars: &mut HashMap<String, Type>,
     funcs: &mut HashMap<String, (Vec<Type>, Type)>,
-) -> Type { 
+) -> Type {
     let ty = match expr {
         Expr::Ident(x) => {
             vars.get(x).cloned().unwrap_or_else(|| var_not_found(x))
