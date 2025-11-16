@@ -1,8 +1,21 @@
 use crate::lexer::ComparisonOp;
 use crate::parser::{Expr, Spanned};
+use std::sync::atomic::{AtomicU32, Ordering};
 
-pub fn eval(Spanned(e, _, _): Spanned<Expr>) -> String {
-    match e {
+static ID_GEN: AtomicU32 = AtomicU32::new(0);
+
+#[derive(Copy, Clone)]
+pub struct Ids {
+    pub id: u32,
+    pub folder_id: Option<u32>,
+}
+
+fn eval(s: Spanned<Expr>) -> String {
+    evalall(s).0
+}
+
+pub fn evalall(Spanned(e, _, _): Spanned<Expr>) -> (String, Ids) {
+    let evalled = match e {
         Expr::Ident(x) => {
             let (start, rest) = x.split_at(1);
             if rest.is_empty() {
@@ -117,7 +130,15 @@ pub fn eval(Spanned(e, _, _): Spanned<Expr>) -> String {
                     .join(" ")
             )
         }
-    }
+    };
+
+    (
+        evalled,
+        Ids {
+            id: ID_GEN.fetch_add(1, Ordering::Relaxed),
+            folder_id: None,
+        },
+    )
 }
 
 pub fn ecmp(cmp: ComparisonOp) -> &'static str {

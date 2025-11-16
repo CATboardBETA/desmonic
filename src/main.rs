@@ -1,18 +1,20 @@
 #![allow(dead_code)]
 
-use crate::eval::eval;
+use crate::eval::evalall;
 use crate::lexer::{Type, lex};
 use crate::parser::parse;
+use crate::state::ToGraphStateJson;
 use crate::types::infer_types;
 use clap::builder::styling;
 use clap::{Parser, Subcommand};
 use log::{LevelFilter, debug, info, trace};
-use std::collections::{HashMap, HashSet};
-use std::process::exit;
+use std::collections::HashMap;
+use std::path::Path;
 
 mod eval;
 mod lexer;
 mod parser;
+mod state;
 mod types;
 
 const STYLES: styling::Styles = styling::Styles::styled()
@@ -120,9 +122,13 @@ fn compile(input: String, output: Option<String>, v: bool) {
         infer_types(expr, &mut vars, &mut funcs);
         debug!("Types: {expr}");
     }
+    let mut evalled = vec![];
     for expr in parsed {
-        println!("expression: {}", eval(expr));
+        let x = evalall(expr);
+        evalled.push(x.clone());
     }
-    let _output_file =
+    let gstate = evalled.into_graph_state();
+    let output_file =
         output.unwrap_or_else(|| format!("{}.json", input.trim_end_matches(".desm")));
+    std::fs::write(output_file, gstate).unwrap();
 }

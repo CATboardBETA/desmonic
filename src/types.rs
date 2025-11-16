@@ -54,9 +54,7 @@ fn calc_type(
     funcs: &mut HashMap<String, (Vec<Type>, Type)>,
 ) -> Type {
     let ty = match expr {
-        Expr::Ident(x) => {
-            vars.get(x).cloned().unwrap_or_else(|| var_not_found(x))
-        }
+        Expr::Ident(x) => vars.get(x).cloned().unwrap_or_else(|| var_not_found(x)),
         Expr::Num(_) => Type::Num,
         Expr::List(x) => {
             let mut old = None;
@@ -166,7 +164,10 @@ fn calc_type(
             bod_ty
         }
         Expr::Call { name, params } => {
-            let func = funcs.get(name).unwrap_or_else(|| func_not_found(name.deref())).clone();
+            let func = funcs
+                .get(name)
+                .unwrap_or_else(|| func_not_found(name.deref()))
+                .clone();
             for (p_found, ty_e) in params.iter_mut().zip(func.0.iter()) {
                 let ty_f = calc_type(p_found, vars, funcs);
                 if ty_f != ty_e.clone() {
@@ -174,7 +175,7 @@ fn calc_type(
                 }
             }
             func.1.clone()
-        },
+        }
         Expr::Ineq { .. } => unreachable!(),
         Expr::Def { .. } => unreachable!(),
     };
@@ -182,11 +183,16 @@ fn calc_type(
     ty
 }
 
-fn wrong_func_type(func: &(Vec<Type>, Type), found: &Spanned<Expr>, type_found: &Type, type_expected: &Type) -> ! {
+fn wrong_func_type(
+    func: &(Vec<Type>, Type),
+    found: &Spanned<Expr>,
+    type_found: &Type,
+    type_expected: &Type,
+) -> ! {
     todo!()
 }
 
-fn func_not_found(name: &str) -> !{
+fn func_not_found(name: &str) -> ! {
     todo!()
 }
 
@@ -200,7 +206,7 @@ fn pow(
     x.2 = x_t.clone();
     let y_t = calc_type(y, vars, funcs);
     y.2 = y_t.clone();
-    match (x_t.clone(), y_t.clone()){
+    match (x_t.clone(), y_t.clone()) {
         (Type::Action, _) => op_action(x, y),
         (_, Type::Action) => op_action(x, y),
         (Type::Num, Type::Num) => Type::Num,
