@@ -75,6 +75,9 @@ pub enum Expr {
         name: String,
         body: Vec<Spanned<Expr>>,
     },
+    Note {
+        content: String,
+    },
 }
 
 impl Debug for Expr {
@@ -169,6 +172,7 @@ impl Debug for Expr {
             Expr::Fold { name, body } => {
                 write!(f, "FOLD({name}:  {body:?})",)
             }
+            Expr::Note { .. } => Ok(()),
         }
     }
 }
@@ -421,6 +425,8 @@ fn parser<'src>()
                 .map_with(|(name, body), e| {
                     Spanned(Expr::Fold { name, body }, e.span(), TT::Infer)
                 }),
+            select! { Tk::String(s) => s }
+                .map_with(|content, e| Spanned(Expr::Note { content }, e.span(), TT::Infer)),
         ))
     });
     stmt.or(expr).repeated().collect::<Vec<_>>()

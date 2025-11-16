@@ -184,6 +184,7 @@ fn calc_type(
         Expr::Ineq { .. } => unreachable!(),
         Expr::Def { .. } => unreachable!(),
         Expr::Fold { .. } => unreachable!(),
+        Expr::Note { .. } => Type::Infer,
     };
     *type_ = ty.clone();
     ty

@@ -18,6 +18,11 @@ impl ToGraphStateJson for Vec<(String, Ids)> {
                     title: latex.strip_prefix("\\fold ").map(ToString::to_string),
                     other: Default::default(),
                 });
+            } else if latex.starts_with("\\note ") {
+                expressions.push(Expression::Comment {
+                    id: id.id.to_string(),
+                    text: latex.strip_prefix("\\note ").unwrap().to_string(),
+                })
             } else {
                 expressions.push(Expression::Expression {
                     id: id.id.to_string(),

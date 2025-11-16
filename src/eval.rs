@@ -161,6 +161,16 @@ pub fn evalall(Spanned(e, _, _): Spanned<Expr>, fid: Option<u32>) -> Vec<(String
             contents2.append(&mut contents);
             return contents2;
         }
+        Expr::Note { content } => {
+            format!(
+                "\\note {}",
+                content
+                    .strip_prefix(['\"', '\''])
+                    .unwrap()
+                    .strip_suffix(['\"', '\''])
+                    .unwrap()
+            )
+        }
     };
 
     vec![(
