@@ -1,3 +1,4 @@
+use crate::func::{FunctionMap, FunctionMapper};
 use crate::lexer::{ComparisonOp, Type};
 use crate::parser::{Elif, Expr, Spanned};
 use std::collections::HashMap;
@@ -6,7 +7,7 @@ use std::ops::Deref;
 pub fn infer_types(
     spanned: &mut Spanned<Expr>,
     vars: &mut HashMap<String, Type>,
-    funcs: &mut HashMap<String, (Vec<Type>, Type)>,
+    funcs: &mut HashMap<String, FunctionMap>,
 ) {
     match spanned {
         Spanned(Expr::Ineq { lhs, cmp, rhs }, _, _) => {
@@ -36,9 +37,10 @@ pub fn infer_types(
             }
             funcs.insert(
                 name.clone(),
-                (
-                    args.iter().map(|x| x.1.clone()).collect::<Vec<Type>>(),
-                    bod_type,
+                FunctionMap::newm(
+                    name.to_string(),
+                    FunctionMapper::from(Box::new(|_| bod_type.clone())),
+                    spanned.1,
                 ),
             );
         }
@@ -56,7 +58,7 @@ pub fn infer_types(
 fn calc_type(
     Spanned(expr, _span, type_): &mut Spanned<Expr>,
     vars: &mut HashMap<String, Type>,
-    funcs: &mut HashMap<String, (Vec<Type>, Type)>,
+    funcs: &mut HashMap<String, FunctionMap>,
 ) -> Type {
     let ty = match expr {
         Expr::Ident(x) => vars.get(x).cloned().unwrap_or_else(|| var_not_found(x)),
@@ -171,15 +173,17 @@ fn calc_type(
         Expr::Call { name, params } => {
             let func = funcs
                 .get(name)
-                .unwrap_or_else(|| func_not_found(name.deref()))
-                .clone();
-            for (p_found, ty_e) in params.iter_mut().zip(func.0.iter()) {
+                .unwrap_or_else(|| func_not_found(name.deref()));
+            let mut ty_fs = vec![];
+            let pars = func.params().clone();
+            for (p_found, ty_e) in params.iter_mut().zip(pars.into_iter()) {
                 let ty_f = calc_type(p_found, vars, funcs);
-                if ty_f != ty_e.clone() {
-                    wrong_func_type(&func, p_found.deref(), &ty_f, ty_e)
+                if !ty_e.contains(&ty_f) {
+                    wrong_func_type(func, p_found.deref(), &ty_f, ty_e)
                 }
+                ty_fs.push(ty_f);
             }
-            func.1.clone()
+            func.mapper()(ty_fs)
         }
         Expr::Ineq { .. } => unreachable!(),
         Expr::Def { .. } => unreachable!(),
@@ -191,10 +195,10 @@ fn calc_type(
 }
 
 fn wrong_func_type(
-    func: &(Vec<Type>, Type),
+    func: &FunctionMap,
     found: &Spanned<Expr>,
     type_found: &Type,
-    type_expected: &Type,
+    type_expected: Vec<Type>,
 ) -> ! {
     todo!()
 }
@@ -207,7 +211,7 @@ fn pow(
     x: &mut Spanned<Expr>,
     y: &mut Spanned<Expr>,
     vars: &mut HashMap<String, Type>,
-    funcs: &mut HashMap<String, (Vec<Type>, Type)>,
+    funcs: &mut HashMap<String, FunctionMap>,
 ) -> Type {
     let x_t = calc_type(x, vars, funcs);
     x.2 = x_t.clone();
@@ -281,7 +285,7 @@ fn div_mul(
     x: &mut Box<Spanned<Expr>>,
     y: &mut Box<Spanned<Expr>>,
     vars: &mut HashMap<String, Type>,
-    funcs: &mut HashMap<String, (Vec<Type>, Type)>,
+    funcs: &mut HashMap<String, FunctionMap>,
 ) -> Type {
     let x_t = calc_type(x, vars, funcs);
     x.2 = x_t.clone();
@@ -355,7 +359,7 @@ fn add_sub(
     x: &mut Box<Spanned<Expr>>,
     y: &mut Box<Spanned<Expr>>,
     vars: &mut HashMap<String, Type>,
-    funcs: &mut HashMap<String, (Vec<Type>, Type)>,
+    funcs: &mut HashMap<String, FunctionMap>,
 ) -> Type {
     let x_t = calc_type(x, vars, funcs);
     x.2 = x_t.clone();

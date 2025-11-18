@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 
 use crate::eval::evalall;
+use crate::func::builtin_funcs;
 use crate::lexer::{Type, lex};
 use crate::parser::parse;
 use crate::state::ToGraphStateJson;
@@ -8,14 +9,14 @@ use crate::types::infer_types;
 use clap::builder::styling;
 use clap::{Parser, Subcommand};
 use log::{LevelFilter, debug, info, trace};
-use rocket::response::{Builder, Responder};
+use rocket::response::Responder;
 use rocket::{Config, Request, Response, get, routes};
 use std::collections::HashMap;
 use std::fs::read_to_string;
-use std::ops::Deref;
 use std::sync::Mutex;
 
 mod eval;
+mod func;
 mod lexer;
 mod parser;
 mod state;
@@ -154,10 +155,11 @@ fn compile(input: String, output: Option<String>, v: bool) {
         info!("Verifying AST...")
     }
     let mut vars = HashMap::from([("x".to_string(), Type::Num), ("y".to_string(), Type::Num)]);
-    let mut funcs = HashMap::from([]);
+
+    let builtins = builtin_funcs();
+    let mut funcs = HashMap::from_iter(builtins.map(|func| (func.name(), func)));
     for expr in &mut parsed {
         infer_types(expr, &mut vars, &mut funcs);
-        debug!("Types: {expr}");
     }
     let mut evalled = vec![];
     for expr in parsed {
