@@ -1,66 +1,75 @@
 use crate::lexer::Type;
-use chumsky::span::SimpleSpan;
 
-pub struct FunctionMapper(pub Box<dyn Fn(Vec<Type>) -> Type>);
-
-impl FunctionMapper {
-    pub fn from(value: Box<dyn Fn(Vec<Type>) -> Type>) -> Self {
-        Self(value)
-    }
-}
-
+// TODO: Try making these arrays with const generics
+#[derive(Clone)]
 pub struct FunctionMap {
-    map: FunctionMapper,
-    pub params: Vec<Vec<Type>>,
-    /// starting on [`usize::MAX`] represents a builtin
-    span: SimpleSpan,
-    name: String,
+    input: Vec<Type>,
+    output: Type,
+    broadcast: Vec<bool>,
 }
 
 impl FunctionMap {
-    fn new<F: Fn(Vec<Type>) -> Type + 'static>(name: &'static str, fnn: F) -> Self {
+    pub fn new<A: AsRef<[(Type, bool)]>>(inputs: A, output: Type) -> Self {
+        let (input, broadcast): (Vec<_>, Vec<_>) = inputs.as_ref().into_iter().cloned().unzip();
         Self {
-            map: FunctionMapper(Box::new(fnn)),
-            params: vec![],
-            span: SimpleSpan::from(usize::MAX..usize::MAX),
-            name: name.to_string(),
+            input,
+            output,
+            broadcast,
         }
     }
-    pub fn newm(name: String, mapper: FunctionMapper, span: SimpleSpan) -> Self {
+    pub fn new_user(input: Vec<Type>, output: Type) -> Self {
+        let mut broadcast = vec![];
+        for i in input.iter() {
+            broadcast.push(if *i == Type::Num {
+                true
+            } else {
+                false
+            })
+        }
         Self {
-            map: mapper,
-            params: vec![],
-            span,
-            name,
+            input,
+            output,
+            broadcast,
         }
     }
-
-    pub(crate) fn mapper(&self) -> &Box<dyn Fn(Vec<Type>) -> Type> {
-        &self.map.0
-    }
-
-    pub(crate) fn name(&self) -> String {
-        self.name.to_string()
-    }
-
-    pub(crate) fn params(&self) -> &Vec<Vec<Type>> {
-        &self.params
+    
+    pub fn broadcast(&self, input: Vec<Type>) -> Type {
+        if input.len() != self.input.len() {
+            unreachable!()
+        }
+        let mut out = vec![];
+        for ((i, ri), b) in self
+            .input
+            .iter()
+            .cloned()
+            .zip(input)
+            .zip(self.broadcast.iter().cloned())
+        {
+            if b && matches!(ri, Type::List(t) if *t == i || Type::List(t.clone()) == i ) {
+                out.push(if !matches!(self.output, Type::List(_)) {
+                    Type::List(Box::new(self.output.clone()))
+                } else {
+                    self.output.clone()
+                })
+            } else {
+                out.push(self.output.clone())
+            }
+        }
+        if let Some(idx) = out.iter()
+            .enumerate()
+            .filter_map(|(idx, b)| matches!(b, Type::List(_)).then(|| idx))
+            .nth(0) {
+            out[idx].clone()
+        } else {
+            out[0].clone()
+        }
     }
 }
 
-// Number*1 -> Number*1 with broadcasting mapping function
-fn n1n1b(pars: Vec<Type>) -> Type {
-    let t = pars[0].clone();
-    if let Type::List(_) = t {
-        t
-    } else if t == Type::Num {
-        t
-    } else {
-        unimplemented!("Normal types for now please :-)")
-    }
-}
-
-pub fn builtin_funcs() -> [FunctionMap; 1] {
-    use crate::func::FunctionMap as FM;
-    [FM::new("sin", n1n1b)]
+pub fn builtin_funcs() -> Vec<(&'static str, FunctionMap)> {
+    use FunctionMap as FM;
+    use Type::*;
+    vec![
+        ("sin", FM::new([(Num, true)], Num))
+    ]
 }

@@ -1,4 +1,4 @@
-use crate::func::{FunctionMap, FunctionMapper};
+use crate::func::FunctionMap;
 use crate::lexer::{ComparisonOp, Type};
 use crate::parser::{Elif, Expr, Spanned};
 use std::collections::HashMap;
@@ -37,11 +37,7 @@ pub fn infer_types(
             }
             funcs.insert(
                 name.clone(),
-                FunctionMap::newm(
-                    name.to_string(),
-                    FunctionMapper::from(Box::new(|_| bod_type.clone())),
-                    spanned.1,
-                ),
+                FunctionMap::new_user(args.into_iter().map(|arg| arg.1.clone()).collect(), bod_type)
             );
         }
         Spanned(Expr::Fold { body, .. }, _, _) => {
@@ -173,17 +169,11 @@ fn calc_type(
         Expr::Call { name, params } => {
             let func = funcs
                 .get(name)
-                .unwrap_or_else(|| func_not_found(name.deref()));
-            let mut ty_fs = vec![];
-            let pars = func.params().clone();
-            for (p_found, ty_e) in params.iter_mut().zip(pars.into_iter()) {
-                let ty_f = calc_type(p_found, vars, funcs);
-                if !ty_e.contains(&ty_f) {
-                    wrong_func_type(func, p_found.deref(), &ty_f, ty_e)
-                }
-                ty_fs.push(ty_f);
+                .unwrap_or_else(|| func_not_found(name.deref())).clone();
+            for param in params.iter_mut() {
+                param.2 = calc_type(param, vars, funcs)
             }
-            func.mapper()(ty_fs)
+            func.broadcast(params.iter().map(|par| par.2.clone()).collect())
         }
         Expr::Ineq { .. } => unreachable!(),
         Expr::Def { .. } => unreachable!(),

@@ -8,7 +8,7 @@ use crate::state::ToGraphStateJson;
 use crate::types::infer_types;
 use clap::builder::styling;
 use clap::{Parser, Subcommand};
-use log::{LevelFilter, debug, info, trace};
+use log::{LevelFilter, info, trace};
 use rocket::response::Responder;
 use rocket::{Config, Request, Response, get, routes};
 use std::collections::HashMap;
@@ -157,9 +157,10 @@ fn compile(input: String, output: Option<String>, v: bool) {
     let mut vars = HashMap::from([("x".to_string(), Type::Num), ("y".to_string(), Type::Num)]);
 
     let builtins = builtin_funcs();
-    let mut funcs = HashMap::from_iter(builtins.map(|func| (func.name(), func)));
+    let mut funcs = HashMap::from_iter(builtins.into_iter().map(|func| (func.0.to_string(), func.1)));
     for expr in &mut parsed {
         infer_types(expr, &mut vars, &mut funcs);
+        println!("{expr}")
     }
     let mut evalled = vec![];
     for expr in parsed {
