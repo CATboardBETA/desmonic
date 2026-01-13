@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 
+use std::collections::HashMap;
 use crate::lexer::{ComparisonOp, Keyword, Token, Type};
 use chumsky::prelude::*;
 use log::{error, info};
@@ -178,7 +179,7 @@ impl Debug for Expr {
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct Spanned<T>(pub T, pub SimpleSpan<usize>, pub Type);
+pub struct Spanned<T>(pub T, pub SimpleSpan<usize>, pub Type, pub HashMap<String, String>);
 
 impl<T> Deref for Spanned<T> {
     type Target = T;
@@ -215,27 +216,28 @@ fn parser<'src>()
 -> impl Parser<'src, &'src [Token], Vec<Spanned<Expr>>, extra::Full<Rich<'src, Token>, (), ()>> {
     use crate::lexer::Token as Tk;
     use Type as TT;
+    use std::default::Default as D;
     let expr = recursive(|p| {
         let atom = {
             let parenthesized = p
                 .clone()
                 .map(|x: Spanned<Expr>| x.0)
                 .delimited_by(just(Tk::LParen), just(Tk::RParen))
-                .map_with(|x, e| Spanned(x, e.span(), TT::Infer));
+                .map_with(|x, e| Spanned(x, e.span(), TT::Infer, D::default()));
             let list = p
                 .clone()
                 .separated_by(just(Tk::Comma))
                 .collect::<Vec<_>>()
                 .map(Expr::List)
                 .delimited_by(just(Tk::LBracket), just(Tk::RBracket))
-                .map_with(|x, e| Spanned(x, e.span(), TT::List(bx(TT::Infer))));
+                .map_with(|x, e| Spanned(x, e.span(), TT::List(bx(TT::Infer)), D::default()));
             let pt2 = p
                 .clone()
                 .then_ignore(just(Tk::Comma))
                 .then(p.clone())
                 .delimited_by(just(Tk::LParen), just(Tk::RParen))
                 .map(|(x, y)| Expr::Pt2(bx(x), bx(y)))
-                .map_with(|x, e| Spanned(x, e.span(), TT::Point));
+                .map_with(|x, e| Spanned(x, e.span(), TT::Point, D::default()));
             let pt3 = p
                 .clone()
                 .then_ignore(just(Tk::Comma))
@@ -244,11 +246,11 @@ fn parser<'src>()
                 .then(p.clone())
                 .delimited_by(just(Tk::LParen), just(Tk::RParen))
                 .map(|((x, y), z)| Expr::Pt3(bx(x), bx(y), bx(z)))
-                .map_with(|x, e| Spanned(x, e.span(), TT::Point3));
-            let num =
-                select! {Tk::Num(n) => Expr::Num(n)}.map_with(|x, e| Spanned(x, e.span(), TT::Num));
+                .map_with(|x, e| Spanned(x, e.span(), TT::Point3, D::default()));
+            let num = select! {Tk::Num(n) => Expr::Num(n)}
+                .map_with(|x, e| Spanned(x, e.span(), TT::Num, D::default()));
             let ident = select! {Tk::Ident(s) => Expr::Ident(s)}
-                .map_with(|x, e| Spanned(x, e.span(), TT::Infer));
+                .map_with(|x, e| Spanned(x, e.span(), TT::Infer, D::default()));
             let call = select! {Tk::Ident(s) => s}
                 .then(
                     p.clone()
@@ -258,7 +260,7 @@ fn parser<'src>()
                         .delimited_by(just(Tk::LParen), just(Tk::RParen)),
                 )
                 .map(|(name, params)| Expr::Call { name, params })
-                .map_with(|x, e| Spanned(x, e.span(), TT::Infer));
+                .map_with(|x, e| Spanned(x, e.span(), TT::Infer, D::default()));
             choice((pt3, pt2, list, parenthesized, num, call, ident))
         };
 
@@ -320,16 +322,23 @@ fn parser<'src>()
                     elsse: elsse.map(bx),
                 },
             )
-            .map_with(|x, e| Spanned(x, e.span(), TT::Infer))
+            .map_with(|x, e| Spanned(x, e.span(), TT::Infer, D::default()))
             .boxed();
 
         let unary = just(Tk::Minus).repeated().foldr_with(atom, |_op, rhs, e| {
-            Spanned(Expr::Neg(bx(rhs)), e.span(), TT::Infer)
+            Spanned(Expr::Neg(bx(rhs)), e.span(), TT::Infer, D::default())
         });
 
         let pow = unary.clone().foldl_with(
             just(Tk::Power).then(unary).repeated(),
-            |lhs, (_op, rhs), e| Spanned(Expr::Pow(bx(lhs), bx(rhs)), e.span(), TT::Infer),
+            |lhs, (_op, rhs), e| {
+                Spanned(
+                    Expr::Pow(bx(lhs), bx(rhs)),
+                    e.span(),
+                    TT::Infer,
+                    D::default(),
+                )
+            },
         );
 
         let product = pow.clone().foldl_with(
@@ -343,6 +352,7 @@ fn parser<'src>()
                     },
                     e.span(),
                     TT::Infer,
+                    D::default(),
                 )
             },
         );
@@ -360,6 +370,7 @@ fn parser<'src>()
                         },
                         e.span(),
                         TT::Infer,
+                        D::default(),
                     )
                 },
             )
@@ -383,6 +394,7 @@ fn parser<'src>()
                         },
                         e.span(),
                         TT::Infer,
+                        D::default(),
                     )
                 }),
             just(Tk::Keyword(Keyword::Fn))
@@ -412,6 +424,7 @@ fn parser<'src>()
                         },
                         e.span(),
                         t,
+                        D::default(),
                     )
                 }),
             just(Tk::Keyword(Keyword::Fold))
@@ -423,13 +436,16 @@ fn parser<'src>()
                         .delimited_by(just(Tk::LBrace), just(Tk::RBrace)),
                 )
                 .map_with(|(name, body), e| {
-                    Spanned(Expr::Fold { name, body }, e.span(), TT::Infer)
+                    Spanned(Expr::Fold { name, body }, e.span(), TT::Infer, D::default())
                 }),
-            select! { Tk::String(s) => s }
-                .map_with(|content, e| Spanned(Expr::Note { content }, e.span(), TT::Infer)),
+            select! { Tk::String(s) => s }.map_with(|content, e| {
+                Spanned(Expr::Note { content }, e.span(), TT::Infer, D::default())
+            }),
         ))
     });
-    stmt.or(expr).repeated().collect::<Vec<_>>()
+    let member = select! { Tk::String(s) => s }.then_ignore(just(Tk::Colon)).then(select! { Tk::String(s) => s } ).boxed();
+    let style = just(Tk::Keyword(Keyword::Sty)).ignore_then(member.separated_by(just(Tk::Comma)).collect::<Vec<_>>().delimited_by(just(Tk::LBrace), just(Tk::RBrace)).map(HashMap::from_iter));
+    choice((stmt, expr)).then(style).map(|(Spanned(a,b,c,_), s)| Spanned(a,b,c,s)).repeated().collect::<Vec<_>>()
 }
 
 fn bx<T>(x: T) -> Box<T> {

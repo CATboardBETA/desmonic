@@ -8,10 +8,11 @@ pub trait ToGraphStateJson {
     fn into_graph_state(self) -> String;
 }
 
-impl ToGraphStateJson for Vec<(String, Ids)> {
+impl ToGraphStateJson for Vec<(String, Ids, HashMap<String, String>)> {
     fn into_graph_state(self) -> String {
         let mut expressions = vec![];
-        for (latex, id) in self.into_iter() {
+        for (latex, id, mut style) in self.into_iter() {
+            let style = style.iter_mut().map(|(k, v)| (k.strip_prefix('"').unwrap().strip_suffix('"').unwrap().to_string(),v.strip_prefix('"').unwrap().strip_suffix('"').unwrap().to_string())).collect::<HashMap<String, String>>();
             if latex.starts_with("\\fold ") {
                 expressions.push(Expression::Folder {
                     id: id.id.to_string(),
@@ -27,7 +28,7 @@ impl ToGraphStateJson for Vec<(String, Ids)> {
                 expressions.push(Expression::Expression {
                     id: id.id.to_string(),
                     latex: Some(latex),
-                    color: None,
+                    color: dbg!(style).get("color").map(|x| Color(u32::from_str_radix(&x.to_string(), 16).unwrap())),
                     folder_id: id.folder_id.map(|x| x.to_string()),
                     other: Default::default(),
                 })

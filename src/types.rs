@@ -1,3 +1,4 @@
+#![allow(unused)]
 use crate::func::FunctionMap;
 use crate::lexer::{ComparisonOp, Type};
 use crate::parser::{Elif, Expr, Spanned};
@@ -10,7 +11,7 @@ pub fn infer_types(
     funcs: &mut HashMap<String, FunctionMap>,
 ) {
     match spanned {
-        Spanned(Expr::Ineq { lhs, cmp, rhs }, _, _) => {
+        Spanned(Expr::Ineq { lhs, cmp, rhs }, _, _, _) => {
             if *cmp == ComparisonOp::IneqEq {
                 if let Expr::Ident(x) = &lhs.0 {
                     let rh_type = calc_type(rhs, vars, funcs);
@@ -23,7 +24,7 @@ pub fn infer_types(
                 spanned.2 = Type::Ineq
             }
         }
-        Spanned(Expr::Def { args, body, name }, _, t) => {
+        Spanned(Expr::Def { args, body, name }, _, t, _) => {
             for arg in args.iter() {
                 vars.insert(arg.0.clone(), arg.1.clone());
             }
@@ -37,10 +38,13 @@ pub fn infer_types(
             }
             funcs.insert(
                 name.clone(),
-                FunctionMap::new_user(args.into_iter().map(|arg| arg.1.clone()).collect(), bod_type)
+                FunctionMap::new_user(
+                    args.iter_mut().map(|arg| arg.1.clone()).collect(),
+                    bod_type,
+                ),
             );
         }
-        Spanned(Expr::Fold { body, .. }, _, _) => {
+        Spanned(Expr::Fold { body, .. }, _, _, _) => {
             for item in body.iter_mut() {
                 calc_type(item, vars, funcs);
             }
@@ -52,7 +56,7 @@ pub fn infer_types(
 }
 
 fn calc_type(
-    Spanned(expr, _span, type_): &mut Spanned<Expr>,
+    Spanned(expr, _span, type_, _): &mut Spanned<Expr>,
     vars: &mut HashMap<String, Type>,
     funcs: &mut HashMap<String, FunctionMap>,
 ) -> Type {
@@ -169,7 +173,8 @@ fn calc_type(
         Expr::Call { name, params } => {
             let func = funcs
                 .get(name)
-                .unwrap_or_else(|| func_not_found(name.deref())).clone();
+                .unwrap_or_else(|| func_not_found(name.deref()))
+                .clone();
             for param in params.iter_mut() {
                 param.2 = calc_type(param, vars, funcs)
             }

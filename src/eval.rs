@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use crate::lexer::ComparisonOp;
 use crate::parser::{Expr, Spanned};
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -14,7 +15,7 @@ fn eval(s: Spanned<Expr>, fid: Option<u32>) -> String {
     evalall(s, fid)[0].0.clone()
 }
 
-pub fn evalall(Spanned(e, _, _): Spanned<Expr>, fid: Option<u32>) -> Vec<(String, Ids)> {
+pub fn evalall(Spanned(e, _, _, sty): Spanned<Expr>, fid: Option<u32>) -> Vec<(String, Ids, HashMap<String, String>)> {
     let evalled = match e {
         Expr::Ident(x) => {
             let (start, rest) = x.split_at(1);
@@ -157,6 +158,7 @@ pub fn evalall(Spanned(e, _, _): Spanned<Expr>, fid: Option<u32>) -> Vec<(String
                     id,
                     folder_id: None,
                 },
+                sty
             )];
             contents2.append(&mut contents);
             return contents2;
@@ -179,6 +181,7 @@ pub fn evalall(Spanned(e, _, _): Spanned<Expr>, fid: Option<u32>) -> Vec<(String
             id: ID_GEN.fetch_add(1, Ordering::Relaxed),
             folder_id: fid,
         },
+        sty
     )]
 }
 

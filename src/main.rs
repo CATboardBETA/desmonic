@@ -157,7 +157,11 @@ fn compile(input: String, output: Option<String>, v: bool) {
     let mut vars = HashMap::from([("x".to_string(), Type::Num), ("y".to_string(), Type::Num)]);
 
     let builtins = builtin_funcs();
-    let mut funcs = HashMap::from_iter(builtins.into_iter().map(|func| (func.0.to_string(), func.1)));
+    let mut funcs = HashMap::from_iter(
+        builtins
+            .into_iter()
+            .map(|func| (func.0.to_string(), func.1)),
+    );
     for expr in &mut parsed {
         infer_types(expr, &mut vars, &mut funcs);
         println!("{expr}")

@@ -20,11 +20,7 @@ impl FunctionMap {
     pub fn new_user(input: Vec<Type>, output: Type) -> Self {
         let mut broadcast = vec![];
         for i in input.iter() {
-            broadcast.push(if *i == Type::Num {
-                true
-            } else {
-                false
-            })
+            broadcast.push(if *i == Type::Num { true } else { false })
         }
         Self {
             input,
@@ -32,7 +28,7 @@ impl FunctionMap {
             broadcast,
         }
     }
-    
+
     pub fn broadcast(&self, input: Vec<Type>) -> Type {
         if input.len() != self.input.len() {
             unreachable!()
@@ -55,10 +51,12 @@ impl FunctionMap {
                 out.push(self.output.clone())
             }
         }
-        if let Some(idx) = out.iter()
+        if let Some(idx) = out
+            .iter()
             .enumerate()
             .filter_map(|(idx, b)| matches!(b, Type::List(_)).then(|| idx))
-            .nth(0) {
+            .nth(0)
+        {
             out[idx].clone()
         } else {
             out[0].clone()
@@ -69,7 +67,5 @@ impl FunctionMap {
 pub fn builtin_funcs() -> Vec<(&'static str, FunctionMap)> {
     use FunctionMap as FM;
     use Type::*;
-    vec![
-        ("sin", FM::new([(Num, true)], Num))
-    ]
+    vec![("sin", FM::new([(Num, true)], Num))]
 }

@@ -57,6 +57,7 @@ pub enum Keyword {
     Elif,
     Else,
     Fold,
+    Sty,
 }
 
 impl FromStr for Keyword {
@@ -70,6 +71,7 @@ impl FromStr for Keyword {
             "elif" => Ok(Elif),
             "else" => Ok(Else),
             "fold" => Ok(Fold),
+            "sty" => Ok(Sty),
             _ => unreachable!("infallible, due to logos"),
         }
     }
@@ -119,7 +121,7 @@ impl FromStr for Type {
 pub enum Token {
     #[regex(r"#(?:Action|Num|Point3|Point|List<(?:Action|Num|Point|Point3)>)", |lex| lex.slice().parse::<Type>().unwrap())]
     Type(Type),
-    #[regex(r"fn|if|elif|else|fold", |lex| lex.slice().parse::<Keyword>().unwrap(), priority = 10000)]
+    #[regex(r"fn|if|elif|else|fold|sty", |lex| lex.slice().parse::<Keyword>().unwrap(), priority = 10000)]
     Keyword(Keyword),
     #[token("(")]
     LParen,
@@ -157,6 +159,13 @@ pub enum Token {
     Num(String),
     #[regex(r#""(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'"#, create_string)]
     String(String),
+
+    // Json
+    #[token("false", |_| false)]
+    #[token("true", |_| true)]
+    Bool(bool),
+    #[token("null")]
+    Null,
 }
 
 fn create_string(s: &mut Lexer<Token>) -> String {
