@@ -173,6 +173,7 @@ pub fn evalall(Spanned(e, _, _, sty): Spanned<Expr>, fid: Option<u32>) -> Vec<(S
                     .unwrap()
             )
         }
+        Expr::Action(i, e) => format!("({}\\to {})",i, eval(*e,fid))
     };
 
     vec![(

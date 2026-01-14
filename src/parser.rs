@@ -79,6 +79,7 @@ pub enum Expr {
     Note {
         content: String,
     },
+    Action(String, Box<Spanned<Expr>>),
 }
 
 impl Debug for Expr {
@@ -167,13 +168,14 @@ impl Debug for Expr {
             Expr::Ineq { lhs, cmp, rhs } => write!(f, "Ineq({lhs}{cmp}{rhs})"),
             Expr::Def { name, args, body } => write!(
                 f,
-                "Def({name}({})={body}",
+                "Def({name}({}) = {body}",
                 args.iter().map(|x| x.0.clone() + ",").collect::<String>()
             ),
             Expr::Fold { name, body } => {
                 write!(f, "FOLD({name}:  {body:?})",)
             }
             Expr::Note { .. } => Ok(()),
+            Expr::Action(i, e) => write!(f, "Action({i} -> {e})")
         }
     }
 }
@@ -261,7 +263,10 @@ fn parser<'src>()
                 )
                 .map(|(name, params)| Expr::Call { name, params })
                 .map_with(|x, e| Spanned(x, e.span(), TT::Infer, D::default()));
-            choice((pt3, pt2, list, parenthesized, num, call, ident))
+            let action = select! {Tk::Ident(s) => s}.then_ignore(just(Tk::Arrow)).then(p.clone())
+                .map(|(ident, expr)| Expr::Action(ident, bx(expr)))
+                .map_with(|x, e| Spanned(x, e.span(), TT::Action, D::default()));
+            choice((action, pt3, pt2, list, parenthesized, num, call, ident))
         };
 
         let comp = select! {
@@ -445,7 +450,7 @@ fn parser<'src>()
     });
     let member = select! { Tk::String(s) => s }.then_ignore(just(Tk::Colon)).then(select! { Tk::String(s) => s } ).boxed();
     let style = just(Tk::Keyword(Keyword::Sty)).ignore_then(member.separated_by(just(Tk::Comma)).collect::<Vec<_>>().delimited_by(just(Tk::LBrace), just(Tk::RBrace)).map(HashMap::from_iter));
-    choice((stmt, expr)).then(style).map(|(Spanned(a,b,c,_), s)| Spanned(a,b,c,s)).repeated().collect::<Vec<_>>()
+    choice((stmt, expr)).then(style.or_not()).map(|(Spanned(a,b,c,_), s)| Spanned(a,b,c,s.unwrap_or_default())).repeated().collect::<Vec<_>>()
 }
 
 fn bx<T>(x: T) -> Box<T> {
