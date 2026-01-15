@@ -151,6 +151,8 @@ pub enum Token {
     Multiply,
     #[token("^")]
     Power,
+    #[token("...")]
+    Ellipsis,
     #[regex(r"[[:alpha:]][[:alnum:]]*", |lex| lex.slice().to_owned())]
     Ident(String),
     #[regex(r"<=|>=|<|>|==|=", |lex| lex.slice().parse::<ComparisonOp>().unwrap(), priority = 1)]
@@ -159,13 +161,6 @@ pub enum Token {
     Num(String),
     #[regex(r#""(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'"#, create_string)]
     String(String),
-
-    // Json
-    #[token("false", |_| false)]
-    #[token("true", |_| true)]
-    Bool(bool),
-    #[token("null")]
-    Null,
 }
 
 fn create_string(s: &mut Lexer<Token>) -> String {

@@ -38,15 +38,12 @@ pub fn infer_types(
             }
             funcs.insert(
                 name.clone(),
-                FunctionMap::new_user(
-                    args.iter_mut().map(|arg| arg.1.clone()).collect(),
-                    bod_type,
-                ),
+                FunctionMap::new_user(args.iter_mut().map(|arg| arg.1.clone()).collect(), bod_type),
             );
         }
         Spanned(Expr::Fold { body, .. }, _, _, _) => {
             for item in body.iter_mut() {
-                calc_type(item, vars, funcs);
+                infer_types(item, vars, funcs);
             }
         }
         _ => {
@@ -55,6 +52,7 @@ pub fn infer_types(
     }
 }
 
+#[stacksafe::stacksafe]
 fn calc_type(
     Spanned(expr, _span, type_, _): &mut Spanned<Expr>,
     vars: &mut HashMap<String, Type>,
@@ -184,7 +182,9 @@ fn calc_type(
         Expr::Def { .. } => unreachable!(),
         Expr::Fold { .. } => unreachable!(),
         Expr::Note { .. } => Type::Infer,
-        Expr::Action(_, _) => Type::Action
+        Expr::Action(_) => Type::Action,
+        Expr::ListE1(l, _, _) => Type::List(Box::new(calc_type(l, vars, funcs))),
+        Expr::ListE2(l, _, _) => Type::List(Box::new(calc_type(l, vars, funcs))),
     };
     *type_ = ty.clone();
     ty

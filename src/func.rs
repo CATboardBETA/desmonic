@@ -54,7 +54,8 @@ impl FunctionMap {
         if let Some(idx) = out
             .iter()
             .enumerate()
-            .filter_map(|(idx, b)| matches!(b, Type::List(_)).then(|| idx))
+            .filter(|&(_, b)| matches!(b, Type::List(_)))
+            .map(|(idx, _)| idx)
             .nth(0)
         {
             out[idx].clone()

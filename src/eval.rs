@@ -1,6 +1,6 @@
-use std::collections::HashMap;
 use crate::lexer::ComparisonOp;
 use crate::parser::{Expr, Spanned};
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicU32, Ordering};
 
 static ID_GEN: AtomicU32 = AtomicU32::new(0);
@@ -15,7 +15,11 @@ fn eval(s: Spanned<Expr>, fid: Option<u32>) -> String {
     evalall(s, fid)[0].0.clone()
 }
 
-pub fn evalall(Spanned(e, _, _, sty): Spanned<Expr>, fid: Option<u32>) -> Vec<(String, Ids, HashMap<String, String>)> {
+#[stacksafe::stacksafe]
+pub fn evalall(
+    Spanned(e, _, _, sty): Spanned<Expr>,
+    fid: Option<u32>,
+) -> Vec<(String, Ids, HashMap<String, String>)> {
     let evalled = match e {
         Expr::Ident(x) => {
             let (start, rest) = x.split_at(1);
@@ -158,7 +162,7 @@ pub fn evalall(Spanned(e, _, _, sty): Spanned<Expr>, fid: Option<u32>) -> Vec<(S
                     id,
                     folder_id: None,
                 },
-                sty
+                sty,
             )];
             contents2.append(&mut contents);
             return contents2;
@@ -173,7 +177,29 @@ pub fn evalall(Spanned(e, _, _, sty): Spanned<Expr>, fid: Option<u32>) -> Vec<(S
                     .unwrap()
             )
         }
-        Expr::Action(i, e) => format!("({}\\to {})",i, eval(*e,fid))
+        Expr::Action(v) => {
+            let mut full = Vec::new();
+            for (i, e) in v {
+                full.push(format!(
+                    "\\left({}\\to {}\\right)",
+                    eval(i, fid),
+                    eval(e, fid)
+                ));
+            }
+            format!("\\left({}\\right)", full.join(","))
+        }
+        Expr::ListE1(l, ll, r) => format!(
+            "\\left[{},{}...{}\\right]",
+            eval(*l, fid),
+            eval(*ll, fid),
+            eval(*r, fid)
+        ),
+        Expr::ListE2(l, rr, r) => format!(
+            "\\left[{}...{},{}\\right]",
+            eval(*l, fid),
+            eval(*rr, fid),
+            eval(*r, fid)
+        ),
     };
 
     vec![(
@@ -182,7 +208,7 @@ pub fn evalall(Spanned(e, _, _, sty): Spanned<Expr>, fid: Option<u32>) -> Vec<(S
             id: ID_GEN.fetch_add(1, Ordering::Relaxed),
             folder_id: fid,
         },
-        sty
+        sty,
     )]
 }
 

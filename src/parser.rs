@@ -1,9 +1,9 @@
 #![allow(dead_code)]
 
-use std::collections::HashMap;
 use crate::lexer::{ComparisonOp, Keyword, Token, Type};
 use chumsky::prelude::*;
 use log::{error, info};
+use std::collections::HashMap;
 use std::fmt::{Debug, Display, Formatter};
 use std::ops::Deref;
 use std::process::exit;
@@ -32,6 +32,8 @@ pub enum Expr {
     Ident(String),
     Num(String),
     List(Vec<Spanned<Expr>>),
+    ListE1(Box<Spanned<Expr>>, Box<Spanned<Expr>>, Box<Spanned<Expr>>),
+    ListE2(Box<Spanned<Expr>>, Box<Spanned<Expr>>, Box<Spanned<Expr>>),
     Pt2(Box<Spanned<Expr>>, Box<Spanned<Expr>>),
     Pt3(Box<Spanned<Expr>>, Box<Spanned<Expr>>, Box<Spanned<Expr>>),
 
@@ -79,7 +81,7 @@ pub enum Expr {
     Note {
         content: String,
     },
-    Action(String, Box<Spanned<Expr>>),
+    Action(Vec<(Spanned<Expr>, Spanned<Expr>)>),
 }
 
 impl Debug for Expr {
@@ -175,13 +177,26 @@ impl Debug for Expr {
                 write!(f, "FOLD({name}:  {body:?})",)
             }
             Expr::Note { .. } => Ok(()),
-            Expr::Action(i, e) => write!(f, "Action({i} -> {e})")
+            Expr::Action(v) => {
+                write!(f, "Action(")?;
+                for (i, e) in v {
+                    write!(f, "{i:?} -> {e:?}")?
+                }
+                Ok(())
+            }
+            Expr::ListE1(l, ll, r) => write!(f, "List([{l:?}, {ll:?}, ..., {r:?}])"),
+            Expr::ListE2(l, rr, r) => write!(f, "List([{l:?}, ..., {rr:?}, {r:?}]"),
         }
     }
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct Spanned<T>(pub T, pub SimpleSpan<usize>, pub Type, pub HashMap<String, String>);
+pub struct Spanned<T>(
+    pub T,
+    pub SimpleSpan<usize>,
+    pub Type,
+    pub HashMap<String, String>,
+);
 
 impl<T> Deref for Spanned<T> {
     type Target = T;
@@ -226,13 +241,34 @@ fn parser<'src>()
                 .map(|x: Spanned<Expr>| x.0)
                 .delimited_by(just(Tk::LParen), just(Tk::RParen))
                 .map_with(|x, e| Spanned(x, e.span(), TT::Infer, D::default()));
-            let list = p
-                .clone()
-                .separated_by(just(Tk::Comma))
-                .collect::<Vec<_>>()
-                .map(Expr::List)
-                .delimited_by(just(Tk::LBracket), just(Tk::RBracket))
-                .map_with(|x, e| Spanned(x, e.span(), TT::List(bx(TT::Infer)), D::default()));
+            let list = choice((
+                p.clone()
+                    .separated_by(just(Tk::Comma))
+                    .collect::<Vec<_>>()
+                    .map(Expr::List)
+                    .delimited_by(just(Tk::LBracket), just(Tk::RBracket))
+                    .map_with(|x, e| Spanned(x, e.span(), TT::List(bx(TT::Infer)), D::default())),
+                p.clone()
+                    .then_ignore(just(Tk::Comma))
+                    .then(p.clone())
+                    .then_ignore(just(Tk::Comma).or_not())
+                    .then_ignore(just(Tk::Ellipsis))
+                    .then_ignore(just(Tk::Comma).or_not())
+                    .then(p.clone())
+                    .map(|((l, ll), r)| Expr::ListE1(bx(l), bx(ll), bx(r)))
+                    .delimited_by(just(Tk::LBracket), just(Tk::RBracket))
+                    .map_with(|x, e| Spanned(x, e.span(), TT::List(bx(TT::Infer)), D::default())),
+                p.clone()
+                    .then_ignore(just(Tk::Comma).or_not())
+                    .then_ignore(just(Tk::Ellipsis))
+                    .then_ignore(just(Tk::Comma).or_not())
+                    .then(p.clone())
+                    .then_ignore(just(Tk::Comma))
+                    .then(p.clone())
+                    .map(|((l, ll), r)| Expr::ListE1(bx(l), bx(ll), bx(r)))
+                    .delimited_by(just(Tk::LBracket), just(Tk::RBracket))
+                    .map_with(|x, e| Spanned(x, e.span(), TT::List(bx(TT::Infer)), D::default())),
+            ));
             let pt2 = p
                 .clone()
                 .then_ignore(just(Tk::Comma))
@@ -263,8 +299,13 @@ fn parser<'src>()
                 )
                 .map(|(name, params)| Expr::Call { name, params })
                 .map_with(|x, e| Spanned(x, e.span(), TT::Infer, D::default()));
-            let action = select! {Tk::Ident(s) => s}.then_ignore(just(Tk::Arrow)).then(p.clone())
-                .map(|(ident, expr)| Expr::Action(ident, bx(expr)))
+            let action = ident
+                .then_ignore(just(Tk::Arrow))
+                .then(p.clone())
+                .separated_by(just(Tk::Comma))
+                .at_least(1)
+                .collect::<Vec<_>>()
+                .map(Expr::Action)
                 .map_with(|x, e| Spanned(x, e.span(), TT::Action, D::default()));
             choice((action, pt3, pt2, list, parenthesized, num, call, ident))
         };
@@ -383,6 +424,19 @@ fn parser<'src>()
         out.or(iff)
     })
     .boxed();
+
+    let member = select! { Tk::String(s) => s }
+        .then_ignore(just(Tk::Colon))
+        .then(select! { Tk::String(s) => s })
+        .boxed();
+    let style = just(Tk::Keyword(Keyword::Sty)).ignore_then(
+        member
+            .separated_by(just(Tk::Comma))
+            .collect::<Vec<_>>()
+            .delimited_by(just(Tk::LBrace), just(Tk::RBrace))
+            .map(HashMap::from_iter),
+    );
+
     let stmt = recursive(|stx| {
         choice((
             expr.clone()
@@ -436,6 +490,8 @@ fn parser<'src>()
                 .ignore_then(select! { Tk::String(s) => s })
                 .then(
                     stx.or(expr.clone())
+                        .then(style.clone().or_not())
+                        .map(|(Spanned(a, b, c, _), s)| Spanned(a, b, c, s.unwrap_or_default()))
                         .repeated()
                         .collect::<Vec<_>>()
                         .delimited_by(just(Tk::LBrace), just(Tk::RBrace)),
@@ -448,9 +504,11 @@ fn parser<'src>()
             }),
         ))
     });
-    let member = select! { Tk::String(s) => s }.then_ignore(just(Tk::Colon)).then(select! { Tk::String(s) => s } ).boxed();
-    let style = just(Tk::Keyword(Keyword::Sty)).ignore_then(member.separated_by(just(Tk::Comma)).collect::<Vec<_>>().delimited_by(just(Tk::LBrace), just(Tk::RBrace)).map(HashMap::from_iter));
-    choice((stmt, expr)).then(style.or_not()).map(|(Spanned(a,b,c,_), s)| Spanned(a,b,c,s.unwrap_or_default())).repeated().collect::<Vec<_>>()
+    stmt.or(expr)
+        .then(style.or_not())
+        .map(|(Spanned(a, b, c, _), s)| Spanned(a, b, c, s.unwrap_or_default()))
+        .repeated()
+        .collect::<Vec<_>>()
 }
 
 fn bx<T>(x: T) -> Box<T> {

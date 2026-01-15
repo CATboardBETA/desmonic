@@ -12,25 +12,54 @@ impl ToGraphStateJson for Vec<(String, Ids, HashMap<String, String>)> {
     fn into_graph_state(self) -> String {
         let mut expressions = vec![];
         for (latex, id, mut style) in self.into_iter() {
-            let style = style.iter_mut().map(|(k, v)| (k.strip_prefix('"').unwrap().strip_suffix('"').unwrap().to_string(),v.strip_prefix('"').unwrap().strip_suffix('"').unwrap().to_string())).collect::<HashMap<String, String>>();
-            if latex.starts_with("\\fold ") {
+            let mut style = style
+                .iter_mut()
+                .map(|(k, v)| {
+                    (
+                        k.strip_prefix('"')
+                            .unwrap()
+                            .strip_suffix('"')
+                            .unwrap()
+                            .to_string(),
+                        v.strip_prefix('"')
+                            .unwrap()
+                            .strip_suffix('"')
+                            .unwrap()
+                            .to_string(),
+                    )
+                })
+                .collect::<HashMap<String, String>>();
+            if latex.starts_with("\\fold \"") {
                 expressions.push(Expression::Folder {
                     id: id.id.to_string(),
-                    title: latex.strip_prefix("\\fold ").map(ToString::to_string),
+                    title: latex
+                        .strip_prefix("\\fold \"")
+                        .unwrap()
+                        .strip_suffix('"')
+                        .map(ToString::to_string),
                     other: Default::default(),
                 });
             } else if latex.starts_with("\\note ") {
                 expressions.push(Expression::Comment {
                     id: id.id.to_string(),
+                    folder_id: id.folder_id.map(|x| x.to_string()),
                     text: latex.strip_prefix("\\note ").unwrap().to_string(),
                 })
             } else {
+                let color = style
+                    .get("color")
+                    .map(|x| Color(u32::from_str_radix(&x.to_string(), 16).unwrap()));
+                style.remove("color");
                 expressions.push(Expression::Expression {
                     id: id.id.to_string(),
                     latex: Some(latex),
-                    color: dbg!(style).get("color").map(|x| Color(u32::from_str_radix(&x.to_string(), 16).unwrap())),
+                    color,
                     folder_id: id.folder_id.map(|x| x.to_string()),
-                    other: Default::default(),
+                    other: style
+                        .clone()
+                        .into_iter()
+                        .map(|(k, v)| (k, Value::from(v)))
+                        .collect(),
                 })
             }
         }
@@ -112,7 +141,12 @@ pub enum Expression {
         other: HashMap<String, Value>,
     },
     #[serde(rename = "text")]
-    Comment { id: String, text: String },
+    Comment {
+        id: String,
+        #[serde(rename = "folderId")]
+        folder_id: Option<String>,
+        text: String,
+    },
 }
 
 pub struct StrIntVisitor;
@@ -145,7 +179,7 @@ impl Serialize for Color {
     where
         S: serde::Serializer,
     {
-        serializer.serialize_str(&format!("#{:x}", self.0))
+        serializer.serialize_str(&format!("#{:06x}", self.0))
     }
 }
 pub struct ColorVisitor {}

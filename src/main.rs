@@ -8,7 +8,7 @@ use crate::state::ToGraphStateJson;
 use crate::types::infer_types;
 use clap::builder::styling;
 use clap::{Parser, Subcommand};
-use log::{LevelFilter, info, trace};
+use log::{LevelFilter, debug, info, trace};
 use rocket::response::Responder;
 use rocket::{Config, Request, Response, get, routes};
 use std::collections::HashMap;
@@ -147,7 +147,7 @@ fn data() -> GraphStateResponse<String> {
 fn compile(input: String, output: Option<String>, v: bool) {
     let lexed = lex(&input, v);
     if v {
-        trace!("Lexed output: {lexed:?}");
+        debug!("Lexed output: {lexed:?}");
     }
     let mut parsed = parse(lexed, v);
     if v {
